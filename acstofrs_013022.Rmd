@@ -1,0 +1,990 @@
+---
+title: "ACS to FRS preliminary data table"
+author: "Chong Li"
+date: "2/7/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(tidyverse,tidycensus,readxl,patchwork)
+library(reshape2)
+```
+
+```{r preparation: census api key}
+census_api_key("e0ff7586a0faf3bf1819178c1392ba6fa3df7ad9")
+```
+
+```{r preparation: load data}
+# load the variable names from 2019 PUMS
+pums_19var = pums_variables %>% 
+  filter(survey == "acs1" & year== "2019") %>% 
+  distinct(var_code, .keep_all = T) 
+
+# household level data
+nj_19h = haven::read_sas("./data/unix_hnj/psam_h34.sas7bdat")
+
+# person level data
+nj_19p = haven::read_sas("./data/unix_pnj/psam_p34.sas7bdat")
+
+# combine household and personal by SERIALNO
+nj_19t = nj_19p %>% left_join(nj_19h,by = c("SERIALNO","RT","DIVISION","PUMA","REGION","ST"))
+
+# one line of code to review the variable names
+# pums_19var %>% select(var_code,var_label,level,data_type,val_min,val_max) %>% View()
+```
+
+```{r step 0 residence}
+# load county reference excel sheet
+# reference source: https://usa.ipums.org/usa/volii/pumas10.shtml
+
+puma_ref = read_excel("./data/puma2010_reference.xls",sheet = 1) %>% 
+  select(State10,PUMA10,State10_Name,PUMA10_Name) %>% 
+  rename(ST = State10,
+         PUMA = PUMA10) %>% 
+  filter(ST == "34") %>% 
+  distinct(PUMA,.keep_all=T)
+
+# Use ST and PUMA from the household sheet and the reference excel sheet, to get the county names
+acs_var = nj_19h %>% 
+  left_join(puma_ref, by=c("ST","PUMA")) %>% 
+  rename(state = State10_Name,
+         residence = PUMA10_Name) %>% 
+  select(SERIALNO, PUMA, ST, state, residence)
+```
+
+```{r step 1; family structure}
+# filter for HHT2 = 1, 6, 10, which refers to families with two parents (married only), or one father or one mother. 
+# Of the total 3641854 households, there are 867,278 households with children (married + mother only + father only)
+# If counting families that are cohabiting, then there are 928,588 households with children 
+
+# acs_var %>% filter(HHT2 == "01" | HHT2 == "06" | HHT2 == "10" | HHT2 =="03") %>% count(wt = WGTP)
+
+# rename the family structure variables
+acs_var1 = acs_var %>% 
+  left_join(nj_19h, by = c("SERIALNO","PUMA","ST"))  %>% 
+  filter(HHT2 == "01" | HHT2 == "06" | HHT2 == "10" | HHT2 =="03") %>%
+  mutate(
+    family_structure = case_when(
+      HHT2 == "01" ~ "two-parent",
+      HHT2 == "03" ~ "two-parent",
+      HHT2 == "06" ~ "single-parent",
+      HHT2 == "10" ~ "single-parent"
+    )
+  ) %>%
+  select(SERIALNO, PUMA, ST, WGTP, state, residence, family_structure)
+
+
+# individuals who belong to the families that are included
+frs_individuals = nj_19p %>% filter(SERIALNO %in% acs_var1$SERIALNO)
+```
+
+```{r step 2: child age}
+# set the prefix for children, and create the age variables
+prefix = paste0("child",1:5)
+
+# select RELSHIPP = 25, 26 and 27
+new_ind = frs_individuals %>% select(SERIALNO, AGEP, DIS, RELSHIPP, CIT) %>% 
+  filter(
+    RELSHIPP == 25 | RELSHIPP == 26 | RELSHIPP == 27
+  ) %>% 
+  arrange(SERIALNO,AGEP) %>% 
+  select(SERIALNO,AGEP,DIS,RELSHIPP,CIT) %>% 
+  mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  ) 
+
+# extract the age of the kids, however, does not take account into families with 5+ kids (which exist)
+# this is the non-transposed version
+kids_b4_trans = dcast(new_ind, id2 ~ SERIALNO, value.var="AGEP") %>% 
+  mutate(
+    id2 = as.numeric(id2)
+  ) %>% 
+  arrange(id2) %>% 
+  filter(id2 <= 5) 
+
+# transpose the age dataframe, with family SERIALNO as the index
+kids_a4 = as.data.frame(t(kids_b4_trans[,-1])) %>% 
+    rename_at(1:5, funs(paste(prefix,"age",sep="_"))) %>% 
+  mutate(
+    SERIALNO = rownames(.)
+  )
+
+# join the dataframe by SERIALNO, replace those empty children's age entry with -1
+acs_var2 = acs_var1 %>% 
+  left_join(kids_a4, by = "SERIALNO") %>% 
+  select(everything(), WGTP) %>% 
+  replace(is.na(.),-1)
+```
+
+```{r step 3: parent age I}
+# first handle the families with only one parent in the household
+single_parent_hh = nj_19h %>% 
+  filter(HHT2 == "06" | HHT2 == "10" )
+
+# create a dataframe with only ages from families with one parent
+single_parent = frs_individuals %>%
+  filter(SERIALNO %in% single_parent_hh$SERIALNO) %>%
+  select(SERIALNO, AGEP, DIS, RELSHIPP) %>%
+  filter(
+    RELSHIPP == 20
+  ) %>%
+  arrange(SERIALNO,AGEP) %>%
+  select(SERIALNO,AGEP,DIS) %>%
+  mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  )
+```
+
+```{r step 3: parent age II }
+# create new variable for parental age
+# update the prefix to parents
+prefix = paste0("parent",1:2)
+columnsToAdd_1 = paste(prefix,"age",sep="_")
+
+# create dataframe to that would account for adult's age
+acs_var3 = acs_var2 %>% 
+  add_column(!!!set_names(as.list(rep(NA, length(columnsToAdd_1))), nm=columnsToAdd_1)) %>%
+  relocate(starts_with("parent"),.after = child5_age)
+
+# add single parent age
+acs_var3 = acs_var3 %>% 
+  left_join(single_parent, by = "SERIALNO") %>% 
+  mutate(
+    parent1_age = AGEP,
+    parent2_age = case_when((!is.na(AGEP)) ~ 17)
+  ) %>% 
+  select(-c(AGEP,id2,DIS))
+```
+
+```{r step 3 parent age III}
+# select for the families with both parents around 
+double_parent_hh = nj_19h %>% 
+  filter(HHT2 == "01" | HHT2 == "03" )
+
+# when you have both parents, parent 1 is the one with higher income
+double_parent = frs_individuals %>%
+  filter(SERIALNO %in% double_parent_hh$SERIALNO) %>%
+  select(SERIALNO, DIS, AGEP, RELSHIPP, PINCP,SEX) %>%
+  filter(
+    RELSHIPP == 20 | RELSHIPP == 21 | RELSHIPP == 22 | RELSHIPP == 23 | RELSHIPP == 24
+  ) %>% 
+  group_by(SERIALNO) %>% 
+  arrange(SERIALNO, desc(PINCP,SEX)) %>%
+  select(SERIALNO,AGEP,PINCP,DIS) %>% 
+  mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  )
+```
+
+```{r step 3 parent age IV}
+# convert the dataframe into one that indicate respective parent ID within each family.
+parent_b4_trans = dcast(double_parent, id2 ~ SERIALNO, value.var="AGEP") %>% 
+  mutate(
+    id2 = as.numeric(id2)
+  ) %>% 
+  arrange(id2) 
+
+# transpose the dataframe for it to match with the original format
+parent_a4 = as.data.frame(t(parent_b4_trans[,-1])) %>% 
+    rename_at(1:2, funs(paste(prefix,"age",sep="_"))) %>% 
+  mutate(
+    SERIALNO = rownames(.)
+  ) %>% 
+  rename(
+    parent1_age_1 = parent1_age,
+    parent2_age_1 = parent2_age
+  )
+
+# merge the age dataframe for both parents with that of the original
+acs_var3.1 = acs_var3 %>% 
+  left_join(parent_a4, by = "SERIALNO") %>% 
+  mutate(
+    parent1_age = case_when(
+      is.na(parent1_age_1) ~ parent1_age,
+      (!is.na(parent1_age_1)) ~ parent1_age_1),
+    parent2_age = case_when(
+      is.na(parent2_age_1) ~ parent2_age,
+      (!is.na(parent2_age_1)) ~ parent2_age_1),
+    parent1_age = case_when(
+      is.na(parent1_age) ~ 17,
+      (!is.na(parent1_age)) ~ parent1_age),
+    parent2_age = case_when(
+      is.na(parent2_age) ~ 17,
+      (!is.na(parent2_age)) ~ parent2_age)
+  ) %>% 
+  select(-c(,parent1_age_1, parent2_age_1))
+```
+
+```{r step 4 parent disability I}
+# create new variable for parental disability
+prefix = paste0("parent",1:2)
+columnsToAdd_2 = paste("disability",prefix,sep="_")
+
+# create dataframe that covers parental disability
+acs_var4 = acs_var3.1 %>% 
+  add_column(!!!set_names(as.list(rep(NA, length(columnsToAdd_2))), nm=columnsToAdd_2)) %>%
+  relocate(starts_with("parent"),.after = parent2_age)
+```
+
+```{r step 4 parent disability II}
+# add single parent age
+acs_var4 = acs_var4 %>% 
+  left_join(single_parent, by = "SERIALNO") %>% 
+  mutate(
+    disability_parent1 = DIS
+  ) %>% 
+  select(-c(AGEP,DIS,id2))
+```
+
+```{r step 4 parent disability III}
+# transpose the dataframe with two parents into the proper dataframe
+parent_b4_trans_1 = dcast(double_parent, id2 ~ SERIALNO, value.var="DIS") %>% 
+  mutate(
+    id2 = as.numeric(id2)
+  ) %>% 
+  arrange(id2) 
+
+parent_a4_1 = as.data.frame(t(parent_b4_trans_1[,-1])) %>%
+    rename_at(1:2, funs(paste(prefix,"disability",sep="_"))) %>%
+  mutate(
+    SERIALNO = rownames(.)
+  ) %>%
+  rename(
+    parent1_disability_1 = parent1_disability,
+    parent2_disability_1 = parent2_disability
+  )
+```
+
+```{r step 4 parent disability IV}
+# update the dataframe with information involving both parents
+# mutate the values with 1 = disabled; 0 = no disability; -9 = no entries
+acs_var4.1 = acs_var4 %>% 
+  left_join(parent_a4_1, by = "SERIALNO") %>% 
+  mutate(
+    disability_parent2 = as.character(disability_parent2))%>%
+  mutate(
+    disability_parent1 = case_when(
+      is.na(parent1_disability_1) ~ disability_parent1,
+      !is.na(parent1_disability_1) ~ parent1_disability_1
+    ),
+    disability_parent2 = case_when(
+      is.na(parent2_disability_1) ~ disability_parent2,
+      !is.na(parent2_disability_1) ~ parent2_disability_1
+    )) %>%
+  mutate(
+    disability_parent1 = case_when(
+      disability_parent1 == "2" ~ "0",
+      disability_parent1 == "1" ~ "1"
+    ),
+    disability_parent2 = case_when(
+      disability_parent2 == "2" ~ "0",
+      disability_parent2 == "1" ~ "1",
+      is.na(disability_parent2) ~ "-9"
+    )
+  ) %>%
+  select(-c(parent1_disability_1, parent2_disability_1))
+```
+
+```{r step 5 child disability}
+prefix = paste0("child",1:5)
+
+# extract the age of the kids, however, does not take account into families with 5+ kids (which exist)
+kids_b4_trans_1 = dcast(new_ind, id2 ~ SERIALNO, value.var="DIS") %>% 
+  mutate(
+    id2 = as.numeric(id2)
+  ) %>% 
+  arrange(id2) %>% 
+  filter(id2 <= 5) 
+
+kids_a4_1 = as.data.frame(t(kids_b4_trans_1[,-1])) %>%
+    rename_at(1:5, funs(paste("disability",sep="_",prefix))) %>%
+  mutate(
+    SERIALNO = rownames(.)
+  )
+
+acs_var5 = acs_var4.1 %>% 
+  left_join(kids_a4_1, by = "SERIALNO") %>% 
+  mutate_at(vars(disability_child1:disability_child5), 
+            funs(case_when( . == "2" ~ "0",
+                           is.na(.) ~ "-9")))
+```
+
+```{r step 6 non-custodial parent }
+# only single-parent household would be eligible to have non-custodial parents
+empty = as.tibble(rep(NA, 8692-1470))
+
+# random generate 1 and 0  based on the given probability of potential non-custodial parents
+cs_bin = as.tibble(rbinom(n=1470, size=1, prob=0.698)) %>% 
+  rbind(empty)
+
+acs_var6 = acs_var5 %>% 
+  arrange(desc(family_structure)) %>% 
+  cbind(cs_bin) %>% 
+  rename(cs_flag = value) %>% 
+  mutate(
+    cs_flag = ifelse(is.na(cs_flag),0,cs_flag)
+  )
+
+acs_var6
+```
+
+```{r step 7 breastfeeding}
+# about 83.9% of hh breastfeed their children
+bf_bin = as.tibble(rbinom(n=8692, size=1, prob=0.839)) 
+
+acs_var7 = acs_var6 %>% 
+  cbind(bf_bin) %>% 
+  rename(breastfeeding = value)
+```
+
+```{r step 8 nontraditionalwork}
+non_trad = frs_individuals %>% 
+  filter(
+    RELSHIPP == 20 | RELSHIPP == 21 | RELSHIPP == 22 | RELSHIPP == 23 | RELSHIPP == 24
+    ) %>% 
+  select(SERIALNO, JWAP, JWDP) %>% 
+  mutate(
+    nontraditionalwork = case_when(
+      as.numeric(JWAP) > 202 ~ 1,
+      as.numeric(JWAP) < 13 ~ 1,
+    )
+  ) %>% 
+  mutate(
+    nontraditionalwork = ifelse(is.na(nontraditionalwork),0,1)
+  ) %>% 
+  group_by(SERIALNO) %>% 
+  summarise(mean = mean(nontraditionalwork)) %>% 
+  mutate(
+    nontraditionalwork = ifelse(mean > 0, 1, 0)
+  ) %>% 
+  select(SERIALNO, nontraditionalwork)
+
+acs_var8 = acs_var7 %>% 
+  left_join(non_trad, by = "SERIALNO") 
+```
+
+```{r step 9 immigration}
+immgration = frs_individuals %>% 
+  filter(RELSHIPP == 20) %>% 
+  select(SERIALNO, CIT) %>% 
+  mutate(
+    immigration = ifelse(CIT == "5", 1, 0)
+  )
+
+acs_var9 = acs_var8 %>% 
+  left_join(immgration, by = "SERIALNO") %>% 
+  select(-CIT)
+```
+
+```{r step 10 work hours}
+wrk_hr = frs_individuals %>% 
+  group_by(SERIALNO) %>% 
+  select(SERIALNO, PINCP, WKHP) %>% 
+  arrange(SERIALNO, desc(PINCP)) %>% 
+   mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  ) %>% 
+  filter(id2 == 1) %>% 
+  select(SERIALNO, WKHP)
+
+acs_var10 = acs_var9 %>% 
+  left_join(wrk_hr, by = "SERIALNO") %>% 
+  rename(parent1_max_work = WKHP)
+```
+
+```{r step 11 hours per shift}
+acs_var11 = acs_var10 %>% 
+  mutate(
+    maxshiftlength_parent1 = as.integer(parent1_max_work/5)
+  )
+```
+
+```{r step 12 work week per year}
+wrk_week = frs_individuals %>% 
+  group_by(SERIALNO) %>% 
+  select(SERIALNO, PINCP, WKWN) %>% 
+  arrange(SERIALNO, desc(PINCP)) %>% 
+   mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  ) %>% 
+  filter(id2 == 1) %>% 
+  select(SERIALNO, WKWN) %>% 
+  rename(maxworkweek_parent1 = WKWN)
+
+acs_var12 = acs_var11 %>% 
+  left_join(wrk_week, by = "SERIALNO") %>% 
+  mutate(
+    maxworkweek_parent1 = ifelse(is.na(maxworkweek_parent1),-9,maxworkweek_parent1)
+  )
+
+acs_var12 %>% count(maxworkweek_parent1)
+```
+
+```{r step 13 travel time between shifts}
+travel_time = frs_individuals %>% 
+  group_by(SERIALNO) %>% 
+  select(SERIALNO, PINCP, JWMNP) %>% 
+  arrange(SERIALNO, desc(PINCP)) %>% 
+   mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  ) %>% 
+  filter(id2 == 1) %>% 
+  mutate(backtobackshifts_parent1 = round(JWMNP/60,1))  %>% 
+  select(SERIALNO, backtobackshifts_parent1) 
+
+acs_var13 = acs_var12 %>% 
+  left_join(travel_time, by = "SERIALNO") %>% 
+  mutate(
+    backtobackshifts_parent1 = ifelse(is.na(backtobackshifts_parent1),-9,backtobackshifts_parent1)
+  )
+```
+
+```{r step 14 weekend days worked }
+acs_var14 = acs_var13 %>% 
+  mutate(
+    weekenddaysworked = parent1_max_work/8 - 5,
+    weekenddaysworked = ifelse(weekenddaysworked > 2, 2, weekenddaysworked),
+    weekenddaysworked = ifelse(weekenddaysworked < 0, 0, weekenddaysworked),
+    weekenddaysworked = round(weekenddaysworked,2)
+  ) 
+
+acs_var14
+```
+
+```{r step 15 first parent work before second}
+# calculate the difference between first parent and second parent's work arrival time
+arrival_time_diff = frs_individuals %>% 
+  filter(
+    RELSHIPP == "20" |  RELSHIPP == "21" |  RELSHIPP == "22" |  RELSHIPP == "23" |  RELSHIPP == "24" 
+  ) %>% 
+  group_by(SERIALNO) %>% 
+  select(SERIALNO, PINCP, JWAP) %>% 
+  arrange(SERIALNO, desc(PINCP)) %>% 
+  mutate(
+    count = n(),
+    JWAP = as.numeric(JWAP)
+  ) %>% 
+  filter(count == 2) %>% 
+  mutate(
+    parent1_first_max = round((lag(JWAP) - JWAP)*5/60,2)
+  ) %>% 
+  filter(!is.na(parent1_first_max) == T) %>% 
+  select(SERIALNO, parent1_first_max)
+
+acs_var15 = acs_var14 %>% 
+  left_join(arrival_time_diff, by = "SERIALNO")
+
+
+acs_var15
+```
+
+```{r step 16 hours of travel time between shifts for the second parent}
+travel_time_1 = frs_individuals %>% 
+  group_by(SERIALNO) %>% 
+  select(SERIALNO, PINCP, JWMNP) %>% 
+  arrange(SERIALNO, desc(PINCP)) %>% 
+   mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  ) %>% 
+  filter(id2 == 2) %>% 
+  mutate(backtobackshifts_parent2 = round(JWMNP/60,1))  %>% 
+  select(SERIALNO, backtobackshifts_parent2) 
+
+acs_var16 = acs_var15 %>% 
+  left_join(travel_time_1, by = "SERIALNO") 
+```
+
+```{r step 17 work day start}
+work_day = frs_individuals %>% 
+  group_by(SERIALNO) %>% 
+  select(SERIALNO, PINCP, JWAP) %>% 
+  arrange(SERIALNO, desc(PINCP)) %>% 
+   mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  ) %>% 
+  filter(id2 == 1) %>% 
+  select(SERIALNO, JWAP) %>% 
+  mutate(
+    JWAP = as.numeric(JWAP) * 5
+  ) %>% 
+  rename(workdaystart = JWAP)
+
+acs_var17 = acs_var16 %>% 
+  left_join(work_day, by = "SERIALNO") %>% 
+  mutate(
+    workdaystart_hr = workdaystart %/% 60,
+    workdaystart_min = workdaystart %% 60) %>% 
+  mutate(
+    workdaystart = ifelse(!is.na(workdaystart_hr), paste0(workdaystart_hr, ":", workdaystart_min), NA)
+  ) %>% 
+  select(-c(workdaystart_hr,workdaystart_min))
+```
+
+```{r step 18 work transportation}
+wrk_transport = frs_individuals %>% 
+  group_by(SERIALNO) %>% 
+  select(SERIALNO, PINCP, JWTRNS) %>% 
+  arrange(SERIALNO, desc(PINCP)) %>% 
+   mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  ) %>% 
+  filter(id2 == 1) %>% 
+  select(SERIALNO, JWTRNS)
+
+acs_var18 = acs_var17 %>% 
+  left_join(wrk_transport, by = "SERIALNO") %>% 
+  rename(user_trans_type = JWTRNS)
+```
+
+```{r step 19 savings}
+savings = as.tibble(rnorm(8692, mean=5300, sd=1000)) %>% 
+  rename(savings = value) 
+
+acs_var19 = acs_var18 %>% 
+  cbind(savings) %>% 
+  mutate(
+    savings = as.integer(savings)
+  )
+
+```
+
+```{r step 20 vechicle value}
+num_veh = nj_19h %>% 
+  filter(SERIALNO %in% acs_var16$SERIALNO) %>% 
+  select(SERIALNO, VEH)
+
+rand_car_val = as.tibble(rnorm(8692, mean=22803, sd=4000)) %>% 
+  rename(car_value = value) 
+
+acs_var20 = acs_var19 %>% 
+  left_join(num_veh, by = "SERIALNO") %>% 
+  cbind(rand_car_val) %>% 
+  mutate(
+    vehicle1_value = round(ifelse(as.numeric(VEH) > 0, car_value, 0),0),
+    vehicle2_value = round(ifelse(as.numeric(VEH) > 1, car_value + runif(1,-2,2) * 2000, 0),0),
+  ) 
+```
+
+```{r step 21 vehicle debt}
+loan_status = as.tibble(rbinom(n=8692, size=1, prob=0.6)) %>% 
+  rename(loan_status = value)
+avg_loan = as.tibble(rnorm(n=8692, mean = 33*450, sd = 1000)) %>% 
+  rename(avg_loan = value)
+
+acs_var21 = acs_var20 %>% 
+  cbind(c(loan_status, avg_loan)) %>% 
+  mutate(
+    vehicle1_owed = ifelse((loan_status == 1 & as.numeric(VEH) > 0), avg_loan, 0),
+    vehicle2_owed = ifelse((loan_status == 1 & as.numeric(VEH) > 1), avg_loan + runif(1,-2,2) * 1000, 0)
+  ) %>% 
+  mutate(
+    vehicle1_owed = as.integer(vehicle1_owed),
+    vehicle2_owed = as.integer(vehicle2_owed)
+  ) %>% 
+  select(-c(VEH,car_value,loan_status,avg_loan))
+
+acs_var21
+```
+
+```{r step 22 debt_payment}
+loan_status_2 = as.tibble(rbinom(n=8692, size=1, prob=0.6)) %>% 
+  rename(car_loan = value)
+
+loan_status_1 = as.tibble(rbinom(n=8692, size=1, prob=0.18)) %>% 
+  rename(medical_loan = value)
+
+avg_credit = as.tibble(rnorm(n=8692, mean = 7000, sd = 1500)) %>% 
+  rename(avg_credit = value)
+
+acs_var22 = acs_var21 %>% 
+  cbind(c(loan_status_1,loan_status_2,avg_credit)) %>% 
+  mutate(
+    debt_payment = round(avg_credit + medical_loan*2400 + car_loan*6000,0)
+  ) %>% 
+  select(-c(medical_loan,car_loan,avg_credit))
+
+acs_var22
+```
+
+```{r step 23 privateplan_type}
+insurance_type = frs_individuals %>% 
+  filter(RELSHIPP == 20) %>% 
+  select(SERIALNO,HINS1,HINS2,PRIVCOV) %>% 
+  mutate(
+    privateplan_type = case_when(
+      PRIVCOV == "1" ~ HINS1
+    ) 
+  ) %>% 
+  mutate(
+    privateplan_type = case_when(
+    privateplan_type == "1" ~ "employer",
+    privateplan_type == "2" ~ "individual")
+  ) %>% 
+  select(SERIALNO, privateplan_type)
+
+acs_var23 = acs_var22 %>% 
+  left_join(insurance_type, by = "SERIALNO")
+
+acs_var23
+```
+
+```{r step 24 family/parental healthcare cost}
+acs_var24 = acs_var23 %>% 
+  mutate(
+    hlth_amt_parent_m = 0,
+    hlth_amt_family_m = 0
+  )
+  
+acs_var24
+```
+
+```{r step 25 family medical expense out of pocket}
+avg_fam_insurance_1 = as.tibble(rnorm(n=8692, mean = 800, sd = 200)) %>%
+  rename(hlth_costs_oop_m = value)
+
+acs_var25 = acs_var24 %>%
+  cbind(avg_fam_insurance_1) %>%
+  mutate(
+    hlth_costs_oop_m = round(hlth_costs_oop_m,0)
+  )
+```
+
+```{r step 26 user plan type}
+acs_var26 = acs_var25 %>% 
+  mutate(
+    userplantype = "employer"
+  )
+```
+
+```{r step 27 medical expernses related to parent disability}
+num_disable = acs_var26 %>% select(SERIALNO, disability_parent1, disability_parent2) %>% 
+  pivot_longer(
+    disability_parent1:disability_parent2,
+    names_to = "parent",
+    values_to = "disability"
+  ) %>% 
+  group_by(SERIALNO) %>% 
+  summarise(
+    num_disable = sum(as.numeric(disability))
+  ) %>% 
+  mutate(
+    num_disable = case_when(
+      num_disable == -8 ~ 1,
+      num_disable == -9 ~ 0,
+      num_disable == 0 ~ 0,
+      num_disable == 1 ~ 1,
+      num_disable == 2 ~ 2
+    )
+  )
+
+acs_var27 = acs_var26 %>% 
+  left_join(num_disable, by = "SERIALNO") %>% 
+  mutate(
+    disability_medical_expenses_mnth = num_disable * hlth_costs_oop_m
+  ) %>% 
+  select(-num_disable)
+```
+
+```{r step 28 housing expenses}
+acs_var28 = acs_var27 %>% 
+  mutate(
+    housing_override = "1"
+  )
+
+housing_cost = nj_19h %>% 
+  select(SERIALNO, RNTP, MRGP)
+
+acs_var28.1 = acs_var28 %>% 
+  left_join(housing_cost, by = "SERIALNO") %>% 
+  mutate(
+    RNTP = ifelse(is.na(RNTP), 0, RNTP),
+    MRGP = ifelse(is.na(MRGP), 0, MRGP),
+    housing_override_amt = RNTP + MRGP
+  ) %>% 
+  select(-c(RNTP,MRGP))
+```
+
+```{r step 29 home type}
+home_type = nj_19h %>% 
+  select(SERIALNO, BLD) %>% 
+  filter(SERIALNO %in% acs_var21$SERIALNO) %>% 
+  mutate(
+    home_type = ifelse(as.numeric(BLD) > 3, "apartment", "house")
+  ) %>% 
+  select(SERIALNO, home_type)
+
+acs_var29 = acs_var28.1 %>% 
+  left_join(home_type, by = "SERIALNO")
+```
+
+```{r step 30 energy source}
+fuel_type = nj_19h %>% 
+  select(SERIALNO, HFL)
+
+acs_var30 = acs_var29 %>% 
+  left_join(fuel_type, by = "SERIALNO") %>% 
+  rename(fuel_source = HFL)
+```
+
+```{r step 31 energy_cost_override}
+energy_cost = nj_19h %>% 
+  select(SERIALNO, GASP, FULP, ELEP, WATP) %>% 
+  filter(SERIALNO %in% acs_var21$SERIALNO) %>% 
+  replace(is.na(.),0) %>% 
+  mutate(
+    energy_cost_override_amt = GASP + FULP/12 + ELEP + WATP/12
+  ) %>% 
+  select(SERIALNO, energy_cost_override_amt)
+
+acs_var31 = acs_var30 %>% 
+  mutate(
+    energy_cost_override = 1
+  ) %>%
+  left_join(energy_cost, by = "SERIALNO") %>% 
+  mutate(
+    energy_cost_override_amt = round(energy_cost_override_amt,0))
+```
+
+```{r step 32 estimate cost for food}
+food_cost = as.tibble(rnorm(8692, mean=8169, sd=1000)) %>% 
+  rename(food_override = value) 
+
+acs_var32 = acs_var31 %>% 
+  cbind(food_cost) %>% 
+  mutate(
+    food_override = as.integer(food_override/12)
+  )
+```
+
+```{r step 33 Estimate source for transportation}
+trans_mode=frs_individuals %>% 
+  group_by(SERIALNO) %>% 
+  select(SERIALNO, PINCP, JWTRNS) %>% 
+  arrange(SERIALNO, desc(PINCP)) %>% 
+   mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  ) %>% 
+  filter(id2 == 1) %>% 
+  select(SERIALNO, JWTRNS) %>% 
+  mutate(
+    JWTRNS = ifelse(JWTRNS == "10" | JWTRNS == "11", "1", "0")
+  ) %>% 
+  rename(trans_override = JWTRNS)
+
+acs_var33 = acs_var32 %>% 
+  left_join(trans_mode, by = "SERIALNO")
+```
+
+```{r step 34 Estimate monthly transportation cost parent 1 & 2}
+acs_var34 = acs_var33 %>% 
+  mutate(
+    trans_override_parent1_amt = "0",
+    trans_override_parent2_amt = "0"
+  )
+```
+
+```{r step 35 Estimated monthly cost for other necessities}
+other_cost = as.tibble(rnorm(8692, mean=7246, sd=900)) %>% 
+  rename(other_override = value) 
+
+acs_var35 = acs_var34 %>% 
+  cbind(other_cost) %>% 
+  mutate(
+    other_override = as.integer(other_override/12)
+  )
+
+acs_var35
+```
+
+```{r step 36 Monthly Additional personal expenses needed by disabled adult(s)}
+disability_expenses_1 = as.tibble(rnorm(8692, mean=1466, sd=200)) %>% 
+  rename(disability_personal_expenses_m = value) 
+
+acs_var36 = acs_var35 %>% 
+  cbind(disability_expenses_1) %>% 
+  left_join(num_disable, by = "SERIALNO") %>% 
+  mutate(
+    disability_personal_expenses_m = as.integer(disability_personal_expenses_m) * num_disable
+  ) %>% 
+  select(-num_disable)
+```
+
+```{r step 37 four NA flags}
+acs_var37 = acs_var36 %>% 
+  mutate(
+    disability_flag = NA,
+    fosterchild_flag = NA,
+    noncitizen_flag = NA,
+    felony_conviction_flag = NA
+  )
+```
+
+```{r step 38 parent 2 max work}
+wrk_hr_1 = frs_individuals %>% 
+  group_by(SERIALNO) %>% 
+  select(SERIALNO, PINCP, WKHP) %>% 
+  arrange(SERIALNO, desc(PINCP)) %>% 
+   mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  ) %>% 
+  filter(id2 == 2) %>% 
+  select(SERIALNO, WKHP)
+
+acs_var38 = acs_var37 %>% 
+  left_join(wrk_hr_1, by = "SERIALNO") %>% 
+  rename(parent2_max_work = WKHP)
+
+acs_var38
+```
+
+```{r step 39 parent 2 hours per day}
+acs_var39 = acs_var38 %>% 
+  mutate(
+    maxshiftlength_parent2 = as.integer(parent2_max_work/5)
+  )
+
+acs_var39
+```
+
+```{r step 40 parent 2 work week}
+wrk_week_1 = frs_individuals %>% 
+  group_by(SERIALNO) %>% 
+  select(SERIALNO, PINCP, WKWN) %>% 
+  arrange(SERIALNO, desc(PINCP)) %>% 
+   mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  ) %>% 
+  filter(id2 == 2) %>% 
+  select(SERIALNO, WKWN) %>% 
+  rename(maxworkweek_parent2 = WKWN)
+
+acs_var40 = acs_var39 %>% 
+  left_join(wrk_week_1, by = "SERIALNO") %>% 
+  mutate(
+    maxworkweek_parent2 = ifelse(is.na(maxworkweek_parent1),-9,maxworkweek_parent2)
+  )
+```
+
+```{r step 41 foster child status}
+# set the prefix for children, and create the age variables
+prefix = paste0("child",1:5)
+
+# foster child dataframe before transpose
+foster_b4_trans = dcast(new_ind, id2 ~ SERIALNO, value.var="RELSHIPP") %>% 
+  mutate(
+    id2 = as.numeric(id2)
+  ) %>% 
+  arrange(id2) %>% 
+  filter(id2 <= 5) 
+
+# transpose the age dataframe, with family SERIALNO as the index
+foster_a4 = as.data.frame(t(foster_b4_trans[,-1])) %>% 
+    rename_at(1:5, funs(paste(prefix,"foster_status",sep="_"))) %>% 
+  mutate(
+    SERIALNO = rownames(.)
+  ) %>% 
+   mutate_at(vars(child1_foster_status:child5_foster_status),
+             funs(case_when( . == "35" ~ "1",
+                           is.na(.) ~ "-9",
+                           . == "25" |. == "26" |. == "27" ~ "0")))
+
+acs_var41 = acs_var40 %>% 
+  left_join(foster_a4, by = "SERIALNO")
+```
+
+```{r step 42 child immigration status}
+# foster child dataframe before transpose
+immi_b4_trans = dcast(new_ind, id2 ~ SERIALNO, value.var="CIT") %>% 
+  mutate(
+    id2 = as.numeric(id2)
+  ) %>% 
+  arrange(id2) %>% 
+  filter(id2 <= 5) 
+
+# transpose the age dataframe, with family SERIALNO as the index
+immi_a4 = as.data.frame(t(immi_b4_trans[,-1])) %>% 
+    rename_at(1:5, funs(paste(prefix,"immigration_status",sep="_"))) %>% 
+  mutate(
+    SERIALNO = rownames(.)
+  ) %>% 
+   mutate_at(vars(child1_immigration_status:child5_immigration_status),
+             funs(ifelse(is.na(.), "-9", .)))
+
+acs_var42 = acs_var41 %>% 
+  left_join(immi_a4, by = "SERIALNO")
+        
+acs_var42          
+```
+
+```{r step 43 itin}
+acs_var43 = acs_var42 %>% 
+  mutate(
+    itin = NA
+  )
+```
+
+```{r step 44 time off for new born}
+father_median = as.tibble(rnorm(8692, mean=1, sd=1)) %>% 
+  rename(other_parent_timeoff_for_newborn = value) 
+
+mother_median = as.tibble(rnorm(8692, mean=11, sd=3)) %>% 
+  rename(mother_timeoff_for_newborn = value)
+
+acs_var44 = acs_var43 %>% 
+  cbind(father_median) %>% 
+  cbind(mother_median) %>% 
+  mutate(
+    other_parent_timeoff_for_newborn = ifelse(other_parent_timeoff_for_newborn < 0, 0, other_parent_timeoff_for_newborn)
+  ) %>% 
+  mutate(
+    other_parent_timeoff_for_newborn = round(other_parent_timeoff_for_newborn,1),
+    mother_timeoff_for_newborn = round(mother_timeoff_for_newborn,1)
+  )
+
+```
+
+```{r step 45 tax rebate}
+acs_var45 = acs_var44 %>% 
+  mutate(
+    state_mctr = 1
+  )
+```
+
+```{r step 46 fli}
+acs_var46 = acs_var45 %>% 
+  mutate(
+    fli = NA
+  )
+```
+
+```{r step 47 tdi}
+acs_var47 = acs_var46 %>% 
+  mutate(
+    tdi = NA
+  )
+```
+
+```{r step 48 baseline and comparison}
+acs_var48 = acs_var47 %>% 
+  mutate(
+    baseline = "0",
+    compare_flag = "0"
+  )
+```
+
+```{r step 49 remaining variables}
+acs_var49 = acs_var48 %>% 
+  mutate(
+    snap_training = NA,
+    fullday_prek = NA,
+    fullday_k = NA,
+    recent_tanf_exit_flag = NA,
+    tanfwork = NA
+  )
+```
+
+```{r}
+write.csv(acs_var49, "./data/frs_inputs_1.csv")
+```
+
