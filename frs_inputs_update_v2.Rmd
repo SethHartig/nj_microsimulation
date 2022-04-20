@@ -1,0 +1,303 @@
+---
+title: "Input Update Version 2"
+author: "Chong Li"
+date: "4/19/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(tidyverse,tidycensus,readxl,patchwork)
+library(reshape2)
+
+census_api_key("e0ff7586a0faf3bf1819178c1392ba6fa3df7ad9")
+
+```
+
+## Overview
+
+* This markdown file seeks to address the issues raised by Seth in input file `frs_inputs_1.csv`
+
+```{r}
+frs_individuals = read.csv("./data/cleaned_data/acs_individuals.csv")
+frs_df = read.csv("./data/cleaned_data/frs_inputs_1.csv")
+
+pums_19var = pums_variables %>% 
+  filter(survey == "acs1" & year== "2019") %>% 
+  distinct(var_code, .keep_all = T) 
+```
+
+
+**1. Need to make first column “CASE_KEY” or delete column, and we can use SERIALNO instead as the unique identifier. It makes it a little more difficult to have a column without a column heading.**
+
+* Solution: 
+* remove the first column (for future reference make sure write.csv does not add that column again)
+
+```{r }
+frs_df1 = frs_df %>% 
+  select(-X)
+```
+
+**2. Need to rename “residence” as “residence_nj” and adjust that so only the county name appears.**
+
+* Solution: 
+* rename the variable; trim all characters that aside from the county information
+* The outcome is in the format of "xxxx County". You may trim the "County" if that is preferred for the input.
+
+```{r}
+# one county that has 
+single_county = frs_df1 %>% 
+  rename(
+    residence_nj = residence
+  ) %>% 
+  filter(str_detect(residence_nj, "County") == T) %>% 
+  mutate(
+      residence_nj = gsub("(County).*", "\\1", residence_nj),
+  ) 
+
+
+multiple_county = frs_df1 %>% 
+   rename(
+    residence_nj = residence
+  ) %>% 
+  filter(str_detect(residence_nj, "County") == F) %>% 
+  mutate(
+     residence_nj = gsub("(Counties).*", "\\1", residence_nj),
+      residence_nj = gsub("(&).*", "\\1", residence_nj),
+      residence_nj = str_remove(residence_nj, "&")
+  ) %>% 
+  mutate(
+    residence_nj = paste0(residence_nj, "County")
+  )
+
+frs_df2 = rbind(single_county,multiple_county) %>% 
+  mutate(
+    residence_nj = str_trim(residence_nj, side = "right")
+  )
+```
+
+**3. Need to make "family_structure", 1 or 2, not "one-parent"/"two-parent"**
+
+* Solution:
+* rename the one-parent
+* NOTE: it seems that there are no one parent family in the data, needs to fix that.
+
+```{r}
+frs_df3 = frs_df2 %>% 
+  mutate(
+    family_structure = ifelse(family_structure == "one-parent", 1, 2)
+  ) %>% 
+  filter(family_structure == 2)
+```
+
+**4. Instead of “NA” or “-9” when disability is not present for an individual, just use 0. The perl codes are set up to not check disability when someone is not in the hh.**
+
+* Solution:
+* For all variables involving disability, changed `NA` to 1 (coding error in the first version.); -9 to 0.
+* NOTE: for the the variable `disability_child1`, there seems to be a disproportionate number of disablities, maybe warrants further investigations.
+
+
+```{r}
+frs_df4 = frs_df3 %>% 
+  mutate(
+    across(disability_parent1:disability_child5, 
+           ~replace_na(.x, 1))
+  ) %>% 
+   mutate(
+    across(disability_parent1:disability_child5, 
+           ~ifelse(.x == -9, 0, .x))
+  ) 
+  
+```
+
+**5. The column “immigration” is in the csv, but that is not a variable. There is also no “parent1_immigration_status”  and “parent2_immigration_status” variables. Can you refer to the ACS variables to FRS variables worksheet for guidance on those? Or is that something you’re still working out? **
+
+* Solution:
+* Created variable for parent immigration status
+* NOTE: this would be addressed for when working with combined sample multiple imputation; child immigraion status needs to be changed as well.
+
+```{r}
+p_prefix = paste0("parent",1:2)
+p_immi = paste(p_prefix,"immigration_status",sep="_")
+df_immi = as.data.frame(matrix(nrow=8692,ncol=2))
+colnames(df_immi) = p_immi
+
+frs_df5 = cbind(frs_df4, df_immi) %>% 
+  relocate(c("parent1_immigration_status","parent2_immigration_status"),.after=immigration)
+```
+
+**6. “weekenddaysworked” should be either 0, 1, or 2, not decimals in between. It seems like you’ve randomized these, but can you adjust it so that the randomization is rounded up? I think you set it so that the highest value is 2, so that would seem to work out.**
+* Solution:
+* rounded the values to 0, 1 and 2. For NA entries (there were about 240), set those numbers to zero
+
+```{r}
+frs_df6 = frs_df5 %>% 
+  mutate(
+    weekenddaysworked = round(weekenddaysworked),
+    weekenddaysworked = ifelse(is.na(weekenddaysworked),0,weekenddaysworked)
+  ) 
+```
+
+
+**7. The maxworkweek variables should be between 0 and 7; it’s the number of days per week a parent works**
+
+* Solution:
+* calculated as by work hours divided by 8 (average work day); those who work more than 56 hours a week are persumed to work 7 days a week.
+* For the `NA` values, all set to 0.
+
+```{r}
+frs_df7 = frs_df6 %>% 
+  mutate(
+    maxworkweek_parent1 = round(parent1_max_work/8),
+    maxworkweek_parent1 = ifelse(maxworkweek_parent1 > 7, 7, maxworkweek_parent1),
+    maxworkweek_parent1 = ifelse(is.na(maxworkweek_parent1), 0, maxworkweek_parent1)
+  )
+```
+
+**8. parent1_first_max should be between 0 and 40; the FRS builds each adult’s working hours per week gradually, to increase income. In a two-adult hh, the Perl codes starts with the first adult, building their hours until it hits this point (parent1_first_max), and then starts building the second adult’s hours.**
+
+* Solution:
+* unclear what changes for this should be about.
+```{r}
+frs_df8 = frs_df7 
+```
+
+**9. Please adjust workdaystart so that the minutes appear as decimals? I.e. 7:15 becomes 7.25, and 8:30 becomes 8.5, etc.**
+
+* Solutions:
+* converted back the time to decimals with two digits
+
+```{r}
+work_day = frs_individuals %>% 
+  group_by(SERIALNO) %>% 
+  select(SERIALNO, PINCP, JWAP) %>% 
+  arrange(SERIALNO, desc(PINCP)) %>% 
+   mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  ) %>% 
+  filter(id2 == 1) %>% 
+  select(SERIALNO, JWAP) %>% 
+  mutate(
+    JWAP = round(as.numeric(JWAP) * 5/60,2)
+  ) %>% 
+  rename(workdaystart = JWAP)
+
+frs_df9 = frs_df8 %>% 
+  mutate(
+    workdaystart = work_day$workdaystart
+  )
+```
+
+
+** 10. Can you adjust user_trans_type so that 1 = public transportation, 0 = private transportation (car), like the transformation document indicates? There are numbers ranging from 1-11 in the csv file right now, so I’m not sure what that means.** 
+
+```{r}
+frs_df10 = frs_df9 %>% 
+  mutate(
+    user_trans_type = ifelse(user_trans_type == 1 | user_trans_type == 8 |
+                             user_trans_type == 9 | user_trans_type == 10 |
+                              user_trans_type == 12 | user_trans_type == 11 , 0, 1)
+  )
+```
+
+** 11. For now, let’s zero out debt_payment. I think it might be a bit too problematic and raises some methodological issues that requires some deeper exploration. E.g. if we’re showing net resources as negative, that might be why people are going into debt, so counting debt payments as a further negative expense may be double-counting. It’s not something we commonly look at in our analysis. **
+
+```{r}
+frs_df11 = frs_df10 %>% 
+  mutate(
+    debt_payment = 0
+  )
+
+```
+
+**12. Can you clarify what “NA” means in privateplan_type? If it means the person has no health insurance, let’s just assign that as “individual” instead. We are partially trying to show how much it costs to pay for a bundle of goods that supports healthy living and development, so if they don’t have health insurance, we should show why not. But just to capture some additional data, if you could add another column like “has_health_insurance”, and mark ther whether the family currently has health insurance or not, that would be great. We can use that in our analysis of this subset of people**
+
+* Solution:
+* The NA values are those without private health insurance
+* No changes are made to NA, but here I do create a new variable that specifies whether one has insurance or no
+```{r}
+hlth_insu = frs_individuals %>% 
+  filter(RELSHIPP == 20) %>% 
+  select(SERIALNO, HICOV)
+
+frs_df12 = frs_df11 %>% 
+  left_join(hlth_insu, by = "SERIALNO") %>% 
+  rename(has_health_insurance = HICOV) %>% 
+  mutate(
+    has_health_insurance = ifelse(has_health_insurance == 1, 1, 0)
+  ) %>% 
+  relocate(has_health_insurance, .after = privateplan_type)
+```
+
+**13. For parent2_max_work, maxshiftlength_parent2, and maxworkweek_parent2, does “NA” mean there is no second adult? If so, just mark those as 0. They’re not invoked but having the column be all numbers is probably easier.**
+
+```{r}
+frs_df13 = frs_df12 %>% 
+  mutate_at(vars(parent2_max_work,maxshiftlength_parent2,maxworkweek_parent2),
+             funs(replace_na(.,0)))
+
+``` 
+
+
+**14. All child[x]_foster_status are 0’s or -9’s. I’m assuming -9 means that child does not exist in the family. But does this mean there are no foster children in the dataset?**
+
+```{r}
+frs_df14 = frs_df13 %>% 
+   mutate(
+    across(child1_foster_status:child5_foster_status, 
+           ~ifelse(.x == -9, 0, .x))
+  ) 
+```
+
+**15 Can you change all -9s to 0 s**
+
+```{r}
+frs_df15 = frs_df14
+```
+
+**16. Will “itin” be changing depending on the immigration imputations? **
+
+* Answer: Yes!
+```{r}
+frs_df16 = frs_df15 
+```
+
+**17. Please make “snap_training” and “tanfwork” always “1”. **
+
+```{r}
+frs_df17 = frs_df16 %>% 
+  mutate(
+    snap_training = 1,
+    tanfwork = 1
+  )
+```
+
+**18. Please make fullday_k and fullday_prek always 0**
+
+```{r}
+frs_df18 = frs_df17 %>% 
+  mutate(
+    fullday_k = 0,
+    fullday_prek = 0
+  )
+```
+
+
+**19. Could you please add in a variable called "earnings_initial" and include a household's annual earnings, if listed in ACS? If there's only a range of earnings (which I think might be the case), if you could figure out how to randomize within that range, in some way that makes sense, that would also work**
+
+```{r}
+nj_19h = haven::read_sas("./data/unix_hnj/psam_h34.sas7bdat")
+```
+
+```{r}
+family_income = nj_19h %>% select(SERIALNO, FINCP)
+
+frs_df19 = frs_df18 %>% 
+  left_join(family_income, by = "SERIALNO") %>% 
+  rename(earnings_initial = FINCP) 
+```
+
+```{r}
+write.csv(frs_df19, "./data/cleaned_data/frs_inputs_2.csv", row.names = F)
+```
+
