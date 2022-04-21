@@ -40,12 +40,15 @@ sub general {
 	#NOTE TO CHONG: I'm modeling this lookup as if there was a SQL table for this list, so that if you find an easy find-and-replace soluation to chaneg all the SQL queries to csv queries, you can do the same here. There is no table like this in the current FRS MySQL database, though. I know there is also likely an easier way to do this for a csv file, similar to hwo the runfrsnj.pl extracts data from the ACS data sheet.
 
 	foreach my $policy_option (qw(sanctioned exclude_abawd_provision covid_medicaid_expansion medicaidchip_all_immigrant_children restore_medicaid_premiums covid_fsp_work_exemption covid_ea_allotment remove_shelter_deduction_cap_alt minben_increase_alt minben_user_input covid_sfsp_sso_expansion covid_eitc_expansion covid_ctc_expansion covid_cdctc_expansion exclude_covid_ptc_expansion covid_ptc_ui_expansion covid_ui_expansion eitc_itin_alt eitc_alt state_eitc_user_input empire_state_ctc_alt tax_credit_alt tax_credit_user_input covid_broadband_benefit child_months_cont_alt months_cont_tanf_user_input onetime_tanfpayment_alt onetime_tanfpayment_user_input pct_increase_tanf_alt pct_increase_tanf_user_input cs_disregard_alt cs_disregard_full_alt housing_subsidy_tanf_alt earnedincome_dis_alt earnedincome_dis_user_input allow_immigrant_tanfeligibility_alt lower_state_workreq lower_state_childunder6_workreq waive_childunder1_workreq covid_ui_disregard expanding_cep_eligiblity_alt weekend_meals_alt ccdf_copay_alt ccdf_threshold_alt ccdf_threshold_user_input)) {
-		$sql = "SELECT ".$in->{'alternate_policy_profile'}." from policy_option_profiles WHERE policy_option = ?";
-		my $stmt = $dbh->prepare($sql) ||
-			&fatalError("Unable to prepare $sql: $DBI::errstr");
-		$stmt->execute($policy_option) ||
-			&fatalError("Unable to execute $sql: $DBI::errstr");
-		$in->{$policy_option} = $stmt->fetchrow();
+		$in->{$policy_option} = 0;
+		if ($in->{'alternate_policy_profile'} ne 'none') {
+			$sql = "SELECT ".$in->{'alternate_policy_profile'}." from policy_option_profiles WHERE policy_option = ?";
+			my $stmt = $dbh->prepare($sql) ||
+				&fatalError("Unable to prepare $sql: $DBI::errstr");
+			$stmt->execute($policy_option) ||
+				&fatalError("Unable to execute $sql: $DBI::errstr");
+			$in->{$policy_option} = $stmt->fetchrow();
+		}
 	}
 	
 	#Alternatively, something like this, which is the basic set of commands for extracting data from frs_input csv file used in teh runfrsnj.pl file. But this needs work, hence commenting it out for now.
