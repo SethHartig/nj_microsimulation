@@ -41,9 +41,9 @@
 
 sub ssi
 {
-	my $self = shift;
-	my $in = $self->{'in'};
-	my $out = $self->{'out'};
+    my $self = shift;
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
 	# outputs created in macro:
 	our $fbr_couple = 1191; 		# monthly max SSI benefit for couple
@@ -438,16 +438,11 @@ sub ssi
 	
 	# outputs
 	foreach my $name (qw(ssi_recd ssi_recd_mnth parent1ssi_recd parent2ssi_recd ssi_recd_count num_parents_ssi parent1_ssi parent2_ssi child_ssi_recd child1_ssi_recd child2_ssi_recd child3_ssi_recd child4_ssi_recd child5_ssi_recd ssi_income ssi_unearned_income ssi_earned_income deemed_income_perchild)) { #added outputs useful to tanf and ccdf here.
-		$out->{$name} = ${$name};
-		$self->saveDebugValues("ssi", $name, ${$name});
-	}
-	
-	#debugs
-	foreach my $variable (qw(ssi_assets ssi_income applicable_asset_limit deemed_child_allocation eligible_parent_earnings ineligible_parent_earnings ineligible_parent_unearned_income ineligible_parent_earned_income ssi_assets number_disabled_children asset_limit_child qualifying_disability_parent1 qualifying_disability_parent2 qualifying_disability_child1 qualifying_disability_child2 qualifying_disability_child3 qualifying_disability_child4 qualifying_disability_child5 debugssi)) { 
-		$self->saveDebugValues("ssi", $variable, $$variable, 1);
-	}
+		$self{'out'}->{$name} = ${$name}; 
+    }
 
-	return(0);
+    return(%self);
+
 }
 
 1;

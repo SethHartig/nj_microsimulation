@@ -9,9 +9,9 @@
 
 sub ssdi
 {
-    my $self = shift; 
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
+    my $self = shift;
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
 	# LOOK AT ME: This is a placeholder code for now. Time permitting, we will be adding in SSDI, but it is a lesser priority than other more immediate tasks. So the placeholder version of this code will just produce the monthly and annual outputs needed for other codes to run.
 	
@@ -29,16 +29,11 @@ sub ssdi
 
 	# outputs
     foreach my $name (qw(ssdi_recd  ssdi_recd_m parent1_ssdi_recd parent2_ssdi_recd child1_ssdi_recd child2_ssdi_recd child3_ssdi_recd child4_ssdi_recd child5_ssdi_recd)) {
-       $out->{$name} = ${$name};
-	   $self->saveDebugValues("ssdi", $name, ${$name});
-    }	
+		$self{'out'}->{$name} = ${$name}; 
+    }
 
-	foreach my $variable (qw(ssdi_recd)) {
-		$self->saveDebugValues("ssdi", $variable, $$variable, 1);
-	}
+    return(%self);
 
-	return(0);
-	
 }
 
 1;

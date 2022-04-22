@@ -80,9 +80,9 @@ use Switch;
 
 sub fsp {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
-    my $dbh  = $self->{'dbh'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
+
 
     # outputs created
     our $fsp_recd = 0;          # annual value of food stamps received
@@ -428,17 +428,11 @@ sub fsp {
 
     # outputs
     foreach my $name (qw(fsp_recd fsp_recd_m fs_assets liheap_recd adult1_excluded adult2_excluded)) {
-        $out->{$name} = ${$name};
-        $self->saveDebugValues("fsp", $name, ${$name});
+		$self{'out'}->{$name} = ${$name}; 
     }
-    
-    foreach my $variable (qw(fs_gross_income_limit fs_net_income_limit fs_max_ben fs_standard_ded fs_gross_income
-    fs_net_income fs_shelter_ded_recd fs_cc_ded_recd fs_adjusted_income sua_m fs_income energy_cost exclude_abawd_provision snap_training sanctioned tanfwork excluded_proration_shelter unqualified_proration_shelter excluded_proration_cc_expenses med_expenses_ded disabled_members_med_expenses passes_asset_test passes_grossincome_test)) {
-        $self->saveDebugValues("fsp", $variable, $$variable, 1);
-    }
-    
-    return(0);
-    
+
+    return(%self);
+
 }
 
 1;

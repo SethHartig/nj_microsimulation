@@ -7,9 +7,9 @@
 
 sub ssp
 {
-	my $self = shift;
-	my $in = $self->{'in'};
-	my $out = $self->{'out'};
+    my $self = shift;
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
 	# outputs created in macro:
 	# Some states supplement the federal SSI benefit with their own state benefit, which increases cash assistance for individuals eligible for SSI or ineligible due to incomes that slightly exceed SSI standards. To keep the SSI module applicable across different states, we are adding a separate module beginning in 2020 that tracks state SSI supplements (called the "state supplementary program", or SSP) in states that have them. Although small in amount, receiving this supplement can also allow individuals with disabilities at slightly higher incomes to receive Medicaid. Kentucky indeed provides an SSP, but it is limited to individuals with disabilities requiring in-home care or living in a licensed facility serving people with disabilities. The potential benefit from Kentucky's SSP program will be $0 unless we reassess our living arrangement options. See https://chfs.ky.gov/agencies/dcbs/dfs/Documents/OMVOLV.pdf. 
@@ -26,15 +26,11 @@ sub ssp
 
 	 # outputs
 	foreach my $name (qw(ssp_couple ssp_individual ssp_individual_in_couple ssp_household)) {
-		$out->{$name} = ${$name};
-		$self->saveDebugValues("ssp", $name, ${$name});
-	}
-  
-	  foreach my $variable (qw(ssp_couple ssp_individual ssp_individual_in_couple)) { 
-		$self->saveDebugValues("ssp", $variable, $$variable, 1);
-	}
+		$self{'out'}->{$name} = ${$name}; 
+    }
 
-	return(0);
+    return(%self);
+
 }
 
 1;

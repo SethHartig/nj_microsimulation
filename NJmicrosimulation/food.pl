@@ -24,9 +24,8 @@
 sub food
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
-    my $dbh = $self->{'dbh'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
   # outputs created
     our $food_expenses = 0; # total annual family food expenses
@@ -116,18 +115,12 @@ sub food
 
   # outputs
     foreach my $name (qw(child_nutrition_flag food_expenses family_foodcost subsidized_food)) {
-        $out->{$name} = ${$name} || '';
-        $self->saveDebugValues("food", $name, ${$name});
+		$self{'out'}->{$name} = ${$name}; 
     }
 
-    foreach my $variable (qw(parent1_foodcost_m parent2_foodcost_m parent3_foodcost_m parent4_foodcost_m child1_foodcost_m child2_foodcost_m 
-                             child3_foodcost_m child4_foodcost_m child5_foodcost_m base_foodcost_m familysize_adjustment)) {
-        $self->saveDebugValues("food", $variable, $$variable, 1);
-    }
+    return(%self);
 
-    return(0);
 }
-
 # Assumptions and justifications (from when methodology was revised in 2017).
 # The USDA separates out food costs according to gender of child for children older than 11, and separates food costs for parents according to gender for all ages. Previous versions calculated food costs for children older than 11 based on the average food cost between the listing for male and female children of that age range, and assumed food costs for a one-parent family based on listings for females age 19-50, and for two-parent families based on listings for one female age 19-50 and one male age 19-50.  Because we are now asking about age of parent, we need to also include lower food costs for older parents (ages 51-61). The differences in monthly food cost between adult males and adult females in the low-cost food plan is at most $43.80, or $525.60 per year. While we could also ask about parent gender in Step 2, the maximum difference from the USDA calculations and the average cost between male and female adult food costs is $272.80 per year per adult, before any food subsidies are considered. This seems fairly nominal, and is based on estimated food costs anyway (with likely considerable margins of error compared to actual food costs) so I think it’s okay to use the assumption that each household adult consumes the average of male and female food costs. We are also removing gender assumptions by using the average of male and female food costs this year.
 # We are also assuming that if a user enters their own food costs, those food costs are out-of-pocket, and therefore inclusive of any savings the family may be getting from WIC or school and summer meals programs.

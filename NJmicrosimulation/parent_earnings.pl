@@ -29,9 +29,8 @@
 sub parent_earnings
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
-    my $dbh = $self->{'dbh'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
 	# outputs created
     our $parent1_employedhours_w = 0; # number of hours/week parent 1 works in paid employment
@@ -225,13 +224,10 @@ sub parent_earnings
     
   # outputs
     foreach my $name (qw(firstrunchildcare parent1_employedhours_w parent2_employedhours_w parent1_earnings parent2_earnings parent1_earnings_m parent2_earnings_m parent1_transhours_w parent2_transhours_w  shifts_parent1 shifts_parent2 multipleshifts_parent1 multipleshifts_parent2 parent_otherhours_w caregiver_workshifts_w caregiver_maxworkweek caregiver_maxshiftlength caregiver_backtobackshifts parent_workhours_w child_support_paid child_support_paid_m tanf_recd tanf_recd_m child_support_recd child_support_recd_m parent2_incapacitated tanf_family_structure unit_size stipend_amt tanflock tanf_sanctioned_amt fsp_recd gift_income_m gift_income tanf_recd_proxy parent1_earnings_w parent2_earnings_w child_care_expenses prop_tax_credit_recd state_cadc_recd ctc_total_recd tax_before_credits cc_expenses_child1 cc_expenses_child2 cc_expenses_child3  cc_expenses_child4 cc_expenses_child5 )) { 
-        $out->{$name} = ${$name};
-        $self->saveDebugValues("parent_earnings", $name, ${$name});
+		$self{'out'}->{$name} = ${$name}; 
     }
 
-    foreach my $variable (qw(firstrunchildcare wage1_annualized wage2_annualized parent2_max_hours_w parent1_fulltime_earn parent2_maxtime_earn)) {
-        $self->saveDebugValues("parent_earnings", $variable, $$variable, 1);
-    }
+    return(%self);
 
 }
 

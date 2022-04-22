@@ -20,9 +20,8 @@
 sub afterschool
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
-
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
     # outputs created
 	our $summerweeks = 0; 
@@ -77,17 +76,11 @@ sub afterschool
 
   # outputs
     foreach my $name (qw(afterschool_expenses afterschool_child1 afterschool_child2 afterschool_child3 afterschool_child4 afterschool_child5 afterschool_child1_copay afterschool_child2_copay afterschool_child3_copay afterschool_child4_copay afterschool_child5_copay)) {
-        $out->{$name} = ${$name};
-        $self->saveDebugValues("afterschool", $name, ${$name});
-    }
-    foreach my $variable (qw(afterschool_expenses afterschool_child1 afterschool_child2 afterschool_child3 afterschool_child4 afterschool_child5 afterschool_child1_copay afterschool_child2_copay afterschool_child3_copay afterschool_child4_copay afterschool_child5_copay)) {
-        $self->saveDebugValues("afterschool", $variable, $$variable, 1);
+		$self{'out'}->{$name} = ${$name}; 
     }
 
-	
-    
-    
-    return(0);
+    return(%self);
+
 }
 
 1;

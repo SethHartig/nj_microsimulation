@@ -14,8 +14,8 @@
 sub interest
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
   # outputs created
     our $interest = 0;   # annual interest on savings
@@ -40,15 +40,10 @@ sub interest
 
   # outputs
     foreach my $name (qw(interest interest_m)) {
-        $out->{$name} = ${$name};
-        $self->saveDebugValues("interest", $name, ${$name});
+		$self{'out'}->{$name} = ${$name}; 
     }
 
-    foreach my $variable (qw(passbook_rate savings)) {
-        $self->saveDebugValues("interest", $variable, $$variable, 1);
-    }
-
-    return(0);
+    return(%self);
 
 }
 

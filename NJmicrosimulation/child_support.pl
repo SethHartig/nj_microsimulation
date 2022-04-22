@@ -59,9 +59,9 @@
 # although we are modeling dynamic changes to the child support amount due to changes in the cp's income, generally, the child support order does not change unless there is "good cause" - “The guidelines may be modified or disregarded by the court only where  good cause is shown. Good cause shall consist of a) the considerations set forth in Appendix IX-A, or the presence of other relevant factors which may make the guidelines inapplicable or subject to modification, and b) the fact that an injustice would result from the application of the guidelines. In all cases, the determination of good cause shall be within the sound discretion of the court.” - Rule 5:6A- Child support guidelines, part V, Chapter II, specific civil actions. (doc titled as r5-6a in the resources folder for NJ).
 #==============================================================================
 sub child_support {
-	my $self = shift;
-	my $in = $self->{'in'};
-	my $out = $self->{'out'};
+    my $self = shift;
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 	
 	#OUTPUTS CREATED
 	our $child_support_paid = 0;	#annual amount of child support paid by ncp to cp.
@@ -1971,13 +1971,10 @@ sub child_support {
 	# outputs 
 	#
 	foreach my $name (qw(child_support_paid child_support_paid_m cs_child_number)) {
-		$out->{$name} = ${$name};
-		$self->saveDebugValues('child_support', $name, ${$name});
-	}
+		$self{'out'}->{$name} = ${$name}; 
+    }
 
-	foreach my $variable (qw(cs_child_number cp_gross_income ncp_gross_income cp_adj_income ncp_adj_income combined_adj_income combined_adj_income_m cp_income_ratio ncp_income_ratio perchild_premiumcost total_cs_premiumcost_m cs_cc_expenses_total cs_cc_expenses_child1 cs_cc_expenses_child2 cs_cc_expenses_child3 cs_cc_expenses_child4 cs_cc_expenses_child5 child_support_paid child_support_paid_m cs_obligation_com total_child_support_oblig_m cs_obligation_com_w child_support_min cs_child_health_expenses_total)) { 
-		$self->saveDebugValues('child_support', $variable, $$variable, 1); 
-	}
+    return(%self);
 
 }
 

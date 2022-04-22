@@ -25,8 +25,8 @@
 sub fli_tdi
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
 	#FLI/TDI module
 	#determine FLI eligibility based on average weekly wage,
@@ -107,14 +107,10 @@ sub fli_tdi
 	
 	# outputs
 	foreach my $name (qw(fli_recd_parent1_w fli_recd_parent2_w tdi_recd_parent1_w fli_recd tdi_recd fli_plus_tdi_recd maximum_fli_weeks parent1_fli_recd parent2_fli_recd parent1_tdi_recd parent2_tdi_recd fli_tdi_flag)) {
-		$out->{$name} = ${$name};
-		$self->saveDebugValues("fli_tdi", $name, ${$name});
-	}
-	foreach my $variable (qw(remaining_tdi_time mother_timeoff_for_newborn)) { 
-		$self->saveDebugValues("fli_tdi", $variable, $$variable, 1);
-	}
+		$self{'out'}->{$name} = ${$name}; 
+    }
 
-	return(0);
+    return(%self);
+
 }
-
 1;

@@ -1,5 +1,5 @@
 #=============================================================================#
-#  Parental Work Effort and Transportation Costs -- KY 2020
+#  Parental Work Effort and Transportation Costs -- NJ 2021
 #=============================================================================#
 # Inputs referenced in this module:
 #   FROM BASE:
@@ -24,9 +24,9 @@
 
 sub work {
  
-	my $self = shift;
-	my $in = $self->{'in'};
-	my $dbh = $self->{'dbh'};
+    my $self = shift;
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
 	#FEDERAL POLICY VARIABLES
 	our $snap_abawd_workreq = 80;
@@ -442,15 +442,10 @@ sub work {
 	foreach my $name (qw(parent_workhours_w parent1_employedhours parent2_employedhours parent1_earnings parent2_earnings trans_expenses parent1_transhours_w parent2_transhours_w parent_workhours_w 
 						parent1_employedhours_w parent2_employedhours_w shifts_parent1 shifts_parent2 transshifts_parent1 transshifts_parent2 multipleshifts_parent1 multipleshifts_parent2 parent_otherhours_w 
 						caregiver_workshifts_w caregiver_maxworkweek caregiver_maxshiftlength caregiver_backtobackshifts)) { 
-		$out->{$name} = ${$name};
-		$self->saveDebugValues("work", $name, ${$name});
-	}
+		$self{'out'}->{$name} = ${$name}; 
+    }
 
-	foreach my $variable (qw(wage1_annualized wage2_annualized parent2_max_hours_w parent1_fulltime_earn 
-							parent2_maxtime_earn avg_miles_driven parent1_transdays_w 
-							parent2_transdays_w parent1_transcost parent2_transcost infantchildpresent debug1 debug2 debug3 debug4 debug5 debug6 debug7)) { 
-		$self->saveDebugValues("work", $variable, $$variable, 1);
-	}
+    return(%self);
 
 }
 

@@ -73,8 +73,8 @@
 sub fedtax
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
 	# outputs created
     our $federal_tax_gross = 0;      # gross federal taxes, before subtracting CADC and CTC
@@ -541,18 +541,10 @@ sub fedtax
 
 	# outputs
     foreach my $name (qw(federal_tax federal_tax_gross cadc_recd ctc_nonref_recd cadc_real_recd filing_status home support ctc_potential ctc_reduction ctc_potential_red federal_tax_cadc cadc_gross federal_tax_income federal_tax_credits cadc_base cadc cadc_real_recd ctc_potential_recd_nonother parent1_taxable_earnings parent2_taxable_earnings cadc_eligible_child_count ctc_eligible_children_count cadc_dis parent1_other_taxable_income  parent2_other_taxable_income federal_adjusted_gross_income taxable_ssdi)) { 
-        $out->{$name} = ${$name};
-        $self->saveDebugValues("fedtax", $name, ${$name});
+		$self{'out'}->{$name} = ${$name}; 
     }
 
-    foreach my $variable (qw(standard_deduction max_taxrate1 max_taxrate2 max_taxrate3 max_taxrate4 cadc_percentage
-                             ctc_max_income ctc_number tax_rate1 tax_rate2 tax_rate3 tax_rate4 cadc_max_claims ctc_per_child
-                             ded_per_exempt earnings interest tanf_recd fsp_recd child_support_recd child_care_expenses
-                             children_under13 children_under17 parent2_earnings family_structure child_number ctc ctc_potential_recd_nonother cadc_eligible_child_count undocumented_immigrant_child_under13_count ctc_eligible_children_count odc_dependent_add other_dependent_credit taxable_ssdi)) {
-        $self->saveDebugValues("fedtax", $variable, $$variable, 1);
-    }
-
-    return(0);
+    return(%self);
 
 }
 
