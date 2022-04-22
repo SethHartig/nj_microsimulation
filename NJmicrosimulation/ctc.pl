@@ -27,8 +27,8 @@
 sub ctc
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
   # outputs created
     our $ctc_total_recd = 0;              # [Child Tax Credit] Total value of the Child Tax Credit, including refundable and non-refundable portions
@@ -98,16 +98,10 @@ sub ctc
 
   # outputs
     foreach my $name (qw(ctc_additional_recd ctc_total_recd federal_tax_credits)) {
-        $out->{$name} = ${$name} || '';
-        $self->saveDebugValues("ctc", $name, ${$name});
+		$self{'out'}->{$name} = ${$name}; 
     }
 
-    foreach my $variable (qw(ctc_add_line3 ctc_add_line6 ctc_add_line12 ctc_additional_recd)) {
-        $self->saveDebugValues("ctc", $variable, $$variable, 1);
-    }
-
-    return(0);
+    return(%self);
 
 }
-
 1;

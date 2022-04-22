@@ -48,10 +48,10 @@
 
 sub ccdf
 {
-    my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
-    my $dbh = $self->{'dbh'};
+    my $self = shift; #It appears that the line my "$self = @_;" also does the same exact thing here. I'm not sure which is more efficient.
+    my $in = $self{'in'};
+    my $out = $self{'out'};
+
     
   # outputs created
     our $cc_subsidized_flag = 0;          # flag indicating whether or not child care is  subsidized
@@ -655,16 +655,12 @@ sub ccdf
 	
   # outputs
     foreach my $name (qw(child_care_expenses child_care_expenses_m  cc_subsidized_flag ccdf_eligible_flag child_care_recd cc_expenses_child1 cc_expenses_child2 cc_expenses_child3 cc_expenses_child4 cc_expenses_child5 unqualified_child_care_expenses)) {
-        $out->{$name} = ${$name} || '';
-        $self->saveDebugValues("ccdf", $name, ${$name});
+		$self{'out'}->{$name} = ${$name}; 
     }
 
-   foreach my $variable (qw(spr_all_children ccdf_fpl ccdf_income ccdf_poverty_percent ccdf_copay overage_payment  ccdf_income_m  spr_ccdf_eligible_children fullcost_ccdf_eligible_children)) { 
-        $self->saveDebugValues("ccdf", $variable, $$variable, 1);
-    }
-	return(0);
+    return(%self);
+
 }
-
 
 
 1;

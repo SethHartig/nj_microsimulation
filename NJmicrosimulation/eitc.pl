@@ -28,9 +28,8 @@ use Switch;
 sub eitc
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
-    my $debug = $self->{'debug'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
   # outputs created
     our $eitc_recd = 0;           # [Federal EITC] annual value of federal EITC
@@ -228,16 +227,10 @@ sub eitc
 
 	# outputs
     foreach my $name (qw(eitc_recd meets_childless_age_min_unit1 eitc_family_structure eitc_eligible_children potential_eitc_no_age_minimum  potential_eitc_itin_eligibility potential_eitc_itin_and_no_age_minimum no_childless_age_minimum taxable_earnings)) { 
-        $out->{$name} = ${$name};
-        $self->saveDebugValues("eitc", $name, ${$name});
+		$self{'out'}->{$name} = ${$name}; 
     }
 
-    foreach my $variable (qw(eitc_phasein_rate eitc_plateau_start eitc_plateau_end eitc_max_value eitc_phaseout_rate eitc_income_limit eitc_family_structure eitc_eligible_children childless_age_min)) {
-        $self->saveDebugValues("eitc", $variable, $$variable, 1);
-    }
-
-    return(0);
+    return(%self);
 
 }
-
 1;

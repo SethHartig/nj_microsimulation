@@ -51,8 +51,9 @@
 sub sec8
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
+
 
   # outputs created
     our $rent_paid = 0;               # Annual rent paid by family: Tenant rent burden or full rent for families w/out subsidies
@@ -287,16 +288,10 @@ sub sec8
 # END:
 	# outputs
     foreach my $name (qw(rent_paid rent_paid_m housing_recd housing_subsidized rent_difference last_received_sec8 sec8_eligible_dependents)) { #  
-        $out->{$name} = ${$name} || '';
-        $self->saveDebugValues("sec8", $name, ${$name});
+ 		$self{'out'}->{$name} = ${$name}; 
     }
-    foreach my $variable (qw(sec8_cc_ded_recd sec8_dis_ded_recd dis_asst_ded med_expenses_ded sec8_gross_income sec8_net_income rent_preliminary rent_difference earnings child_care_expenses sec8_payment_standard sec8_eligible_dependents)) { # verylow_income_limit low_income_limit ami_adjustment
-        $self->saveDebugValues("sec8", $variable, $$variable, 1);
-    }
-    
 
-    return(0);
+    return(%self);
 
 }
-
 1;

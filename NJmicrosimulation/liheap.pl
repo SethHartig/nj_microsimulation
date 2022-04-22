@@ -52,9 +52,9 @@
 
 sub liheap
 {
-	my $self = shift;
-	my $in = $self->{'in'};
-	my $out = $self->{'out'};
+    my $self = shift;
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
 	# interim variables created in macro
 	our $liheap_income = 0;			#Total of income sources used for LIHEAP eligibilty determination
@@ -446,14 +446,10 @@ sub liheap
 	
 	# outputs
 	foreach my $name (qw(liheap_recd rent_paid rent_paid_m usf_benefit)) {
-	$out->{$name} = ${$name} || '';
-	$self->saveDebugValues("liheap", $name, ${$name});
-	}
+		$self{'out'}->{$name} = ${$name}; 
+    }
 
-	foreach my $variable (qw(liheap_income liheap_income_m liheap_income_pov_pct unit_size liheap_exempt_income liheap_potential usf_benefit remaining_energy_costs)) { 
-	$self->saveDebugValues("liheap", $variable, $$variable, 1);
-	}
-	return(0);
+    return(%self);
 
 }
 	

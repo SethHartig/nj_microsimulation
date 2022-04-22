@@ -10,8 +10,8 @@
 sub payroll
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
   # outputs created
     our $payroll_tax = 0;
@@ -68,16 +68,10 @@ sub payroll
 
   # outputs
     foreach my $name (qw(payroll_tax parent1_payroll_tax parent2_payroll_tax parent3_payroll_tax parent4_payroll_tax)) {
-        $out->{$name} = ${$name} || '';
-        $self->saveDebugValues("payroll", $name, ${$name});
+		$self{'out'}->{$name} = ${$name}; 
     }
 
-    foreach my $variable (qw(social_sec_tax_parent1 social_sec_tax_parent2 social_sec_tax_parent3 social_sec_tax_parent4 medicare_tax_parent1 medicare_tax_parent2 medicare_tax_parent3 medicare_tax_parent4 add_medicare_tax_parent1 add_medicare_tax_parent2 add_medicare_tax_parent3 add_medicare_tax_parent4)) {
-        $self->saveDebugValues("payroll", $variable, $$variable, 1);
-    }
-
-    return(0);
+    return(%self);
 
 }
-
 1;

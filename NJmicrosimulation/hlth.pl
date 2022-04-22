@@ -40,8 +40,9 @@
 sub hlth
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
+
 	#Policy variables:
     our $parent_medicaid_limit = 1.38;  # adult income limit as % of FPG
     our $child_medicaid_limit = 3.55;    # child income limit as % of FPG
@@ -940,20 +941,10 @@ sub hlth
 	child4_health_expenses
 	child5_health_expenses
 	)) { 
-		$out->{$name} = ${$name};
-		$self->saveDebugValues("hlth", $name, ${$name});
-	}
+		$self{'out'}->{$name} = ${$name}; 
+    }
 
-	foreach my $variable (qw(firstrunchildcare sub_family_cost sub_parent_cost parent_cost_employer family_cost_employer 
-		familyswitch_dummy parentswitch_dummy parent_cost family_cost 
-		hlth state year family_structure child_number residence 
-		percent_of_poverty privateplan_type userplantype sub_minimum sub_maximum private_max 
-		max_income_pct_employer hlth_gross_income_m self_only_coverage hlth_plan parent_cost_individual family_cost_individual parent1_premium parent1_premium_individual parent1_premium_ratio a27yo_premium_ratio a27yo_premium medicaidorchip_premiums parent_greencard_premiums family_greencard_premiums medically_needy_eligible_expenses_ssi_pathway medically_needy_net_income medically_needy_incomelimit medically_needy_assets medically_needy_assetlimit debughlth1 debughlth2 debughlth3
-		)) { 
-		$self->saveDebugValues("hlth", $variable, $$variable, 1);
-	}
-
-	return(0);
+    return(%self);
 
 }
 

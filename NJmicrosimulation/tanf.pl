@@ -69,8 +69,9 @@
 sub tanf 
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
+
 
 	# POLICY VARIABLES:         
     our $tanf_asset_limit = 2000;       # TANF asset limit for NJ (same as KY)
@@ -555,15 +556,11 @@ sub tanf
 
 	# outputs
     foreach my $name (qw(tanf_recd tanf_recd_m child_support_recd child_support_recd_m parent2_incapacitated tanf_family_structure  tanf_child_number unit_size tanf_stipend_amt tanflock tanf_recd_proxy tanf_sanctioned_amt tanf_children_under1 tanf_children_under6 tanf_oneparent_id)) { #These should match the outputs in the tanflock condition above, so any additions to these variables should also be added to that foreach statement. 
-        $out->{$name} = ${$name} || '';
-        $self->saveDebugValues("tanf", $name, ${$name});
+		$self{'out'}->{$name} = ${$name}; 
     }
 
-    foreach my $variable (qw(tanf_earned_ded_recd tanf_maxben parent1_exactworkdays parent2_exactworkdays tanf_gross_income tanf_income cs_disregard_alt cs_disregard_full_alt months_cont_tanf_user_input pct_increase_tanf_user_input	pct_increase_tanf_alt onetime_tanfpayment_alt sanctioned meetsworkreq unit_fpl tanf_recd_debug1 tanf_recd_debug2)) { 
-        $self->saveDebugValues("tanf", $variable, $$variable, 1);
-    }
-    
-    return(0);
+    return(%self);
+
 }
 
 1;

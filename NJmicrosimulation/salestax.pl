@@ -12,8 +12,8 @@
 sub salestax
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
  
     # Additional inputs
     our $statesalestax_rate_other = 0.06625;	# The state sales tax is 6.625% in NJ for sales made on and after January 1, 2018 https://www.state.nj.us/treasury/taxation/ratechange/su-overview.shtml. Sales Tax is levied on: Tangible personal property; Specified digital products; and Enumerated services.
@@ -33,15 +33,10 @@ sub salestax
 
     # outputs
     foreach my $name (qw(salestax_rate_other)) {
-        $out->{$name} = ${$name} || '';
-        $self->saveDebugValues("salestax", $name, ${$name});
+ 		$self{'out'}->{$name} = ${$name}; 
     }
 
-    foreach my $variable (qw(salestax salestax_rate_other statesalestax_rate_other localsalestax_rate_other)) { 
-        $self->saveDebugValues("salestax", $variable, $$variable, 1);
-    }
-
-    return(0);
+    return(%self);
 
 }
 

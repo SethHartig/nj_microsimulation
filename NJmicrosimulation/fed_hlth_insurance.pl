@@ -36,8 +36,8 @@
 sub fed_hlth_insurance
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
     # outputs created
 
@@ -552,15 +552,10 @@ sub fed_hlth_insurance
 	
   # outputs
     foreach my $name (qw(max_income_pct_employer magi_disregard sub_minimum sub_maximum hlth_gross_income_m percent_of_poverty private_max percent_of_poverty_ssi medically_needy)) {
-        $out->{$name} = ${$name};
-        $self->saveDebugValues("fed_hlth_insurance", $name, ${$name});
+		$self{'out'}->{$name} = ${$name}; 
     }
 
-    foreach my $variable (qw(subsidy_pov_level_m earnings_mnth interest_m)) {
-        $self->saveDebugValues("fed_hlth_insurance", $variable, $$variable, 1);
-    }
-
-    return(0);
+    return(%self);
 
 }
 

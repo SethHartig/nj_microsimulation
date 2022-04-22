@@ -37,8 +37,9 @@
 sub wic
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
+
 	#  my $dbh = $self->{'dbh'};
 
 	# outputs created
@@ -178,14 +179,11 @@ sub wic
 	
 	# outputs
 	foreach my $name (qw(wic_recd)) {
-		$out->{$name} = ${$name};
-		$self->saveDebugValues("wic", $name, ${$name});
-	}
-	foreach my $variable (qw(wic_income wic_recd)) { 
-		$self->saveDebugValues("wic", $variable, $$variable, 1);
-	}
+		$self{'out'}->{$name} = ${$name}; 
+    }
 
-	return(0);
+    return(%self);
+
 }
 
 1;

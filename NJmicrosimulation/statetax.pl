@@ -47,10 +47,10 @@
 #=============================================================================#
 
 sub statetax {	
-	my $self = shift;
-	my $in = $self->{'in'};
-	my $out = $self->{'out'};
-	my $dbh = $self->{'dbh'};
+    my $self = shift;
+    my $in = $self{'in'};
+    my $out = $self{'out'};
+
 
 	  # additional policy variables used within this macro
 	our $couple_min = 20000;			  # Income below which state taxes are not due for married or head of household
@@ -404,15 +404,10 @@ sub statetax {
 	
 	# outputs
 	foreach my $name (qw(state_tax state_eic_recd prop_tax_credit_recd state_cadc_recd state_tax_gross state_tax_credits tax_before_credits tax_after_credits eitc_recd)) { #added recalculated federal eitc here. 
-		$out->{$name} = ${$name} || '';
-		$self->saveDebugValues("statetax", $name, ${$name});
-	}
+		$self{'out'}->{$name} = ${$name}; 
+    }
 
-	foreach my $variable (qw(state_gross_inc couple_min single_min exemption child_exempt_amt single_exempt_amt  couple_exempt_amt  health_ded state_gross_inc state_tax_inc adj_state_tax_inc  rent_prop_tax rent_pt_pct tax_diff prop_tax_ded prop_tax_credit_recd state_eitc_pct net_income state_tax_rate adj_state_tax_rate less_amt adj_less_amt state_payroll_tax middle_class_tax_rebate additional_state_tax_credits)) {
-		$self->saveDebugValues("statetax", $variable, $$variable, 1);
-	}
-
-	return(0);
+    return(%self);
 
 }
 

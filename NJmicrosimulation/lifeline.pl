@@ -37,9 +37,8 @@
 sub lifeline
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
-    my $dbh = $self->{'dbh'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
     # outputs created
 	our $lifeline_cost = 0; #In NJ, at least Assurance Wireless offers free talk and text as well as free data through Emergency Broadband. https://www.assurancewireless.com/lifeline-services/states/new-jersey-lifeline-free-government-phone-service #Also, this is true in KS and so far every state we've done since 2020; Assurance's reach seemns broad.  We are tentatively making this a federal code.
@@ -88,15 +87,10 @@ sub lifeline
 	} 
   # outputs
     foreach my $name (qw(lifeline lifeline_subsidy lifeline_inc_limit lifeline_recd ssi_recd lifeline_cost covid_broadband_benefit ebb_recd)) {
-        $out->{$name} = ${$name};
-        $self->saveDebugValues("lifeline", $name, ${$name});
+		$self{'out'}->{$name} = ${$name}; 
     }
 
-    foreach my $variable (qw(lifeline_recd lifeline_cost ebb_recd)) {
-        $self->saveDebugValues("lifeline", $variable, $$variable, 1);
-    }
-
-    return(0);
+    return(%self);
 
 }
 

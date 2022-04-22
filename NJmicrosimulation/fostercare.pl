@@ -16,9 +16,8 @@
 sub fostercare
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
-    my $debug = $self->{'debug'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 	
 	#	Variables needed in this module
 	our $base_rate_0_5 = 763;
@@ -171,15 +170,10 @@ sub fostercare
 	
 	# outputs
     foreach my $name (qw(child1_foster_care_payment_m child2_foster_care_payment_m child3_foster_care_payment_m child4_foster_care_payment_m child5_foster_care_payment_m foster_child_payment_m foster_children_count foster_child_payment)) {
-        $out->{$name} = ${$name};
-        $self->saveDebugValues("fostercare", $name, ${$name});
+		$self{'out'}->{$name} = ${$name}; 
     }
 
-    foreach my $variable (qw(child1_foster_care_payment_m child2_foster_care_payment_m child3_foster_care_payment_m child4_foster_care_payment_m child5_foster_care_payment_m foster_child_payment_m)) {
-        $self->saveDebugValues("fostercare", $variable, $$variable, 1);
-    }
-
-    return(0);
+    return(%self);
 
 }
 

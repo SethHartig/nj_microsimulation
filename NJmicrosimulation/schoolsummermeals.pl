@@ -56,8 +56,8 @@
 sub schoolsummermeals
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
 	# outputs created
 	#NOTE: The input screens (on step 7) will ask whether the parent is sending their children to a school that takes up the community eligibility provision or Provision 2 of federal school meal legislation in counties where there are schools that have taken up this provision. The Commnuity Eligibility Provision (CEP)  allows schools or school districts to provide free breakfasts and lunches to all students, regardless of income or SNAP participation. Schools or districts are eligible to participate in this program if 40% or more of students are calculated as eligible for participate. Incentives for schools participating in this program include lower administrative costs (no one needs to check student income or confirm eligibility in the lunch line) and a higher federal reimbursement rate for meals (at 1.6 times the normal reimbursement rate). Schools still pay the difference between the total federal reimbursements and the costs of providing school meals, but schools also determine the costs of meals students receive. 
@@ -357,15 +357,11 @@ sub schoolsummermeals
 	
 	# outputs
 	foreach my $name (qw(child_foodcost_red_total permealcost child1_foodcost_red child2_foodcost_red child3_foodcost_red child4_foodcost_red child5_foodcost_red)) {
-		$out->{$name} = ${$name};
-		$self->saveDebugValues("schoolsummermeals", $name, ${$name});
-	}
-	#debugs
-	foreach my $variable (qw(child_foodcost_red_total child1_lunch_red child1_bkfst_red cep_participation_lunch child2_foodcost_m schoolmeals_inc_m schoolmeals_inc debug2 child1_sfsp_red)) {
-		$self->saveDebugValues("schoolsummermeals", $variable, $$variable, 1);
-	}
+		$self{'out'}->{$name} = ${$name}; 
+    }
 
-	return(0);
+    return(%self);
+
 }
 
 1;

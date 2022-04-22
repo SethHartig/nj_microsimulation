@@ -14,9 +14,9 @@
 
 sub unemployment
 {
-    my $self = shift; 
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
+    my $self = shift;
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
 	# This subroutine is new for 2021 and is especially important to include in light of the COVID-19 pandemic.
 	# We are starting with a state-by-state approach but may end up creating a more generic code that uses state variables defined or hard-coded elsewhere.
@@ -148,16 +148,11 @@ sub unemployment
 
 	# outputs
     foreach my $name (qw(ui_recd ui_recd_m parent1_ui_recd parent2_ui_recd parent3_ui_recd parent4_ui_recd fpuc_recd parent1_fpuc_recd parent2_fpuc_recd parent3_fpuc_recd parent4_fpuc_recd)) {
-       $out->{$name} = ${$name};
-	   $self->saveDebugValues("unemployment", $name, ${$name});
-    }	
+		$self{'out'}->{$name} = ${$name}; 
+    }
 
-	foreach my $variable (qw(ui_recd parent1_ui_recd parent2_ui_recd parent3_ui_recd parent4_ui_recd parent1_wba parent2_wba)) {
-		$self->saveDebugValues("unemployment", $variable, $$variable, 1);
-	}
+    return(%self);
 
-	return(0);
-	
 }
 
 1;

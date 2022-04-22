@@ -25,8 +25,8 @@
 sub other
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 
 
 	#Hard-coded policy variables:
@@ -112,15 +112,10 @@ sub other
 
 	# outputs
     foreach my $name (qw(other_expenses disability_expenses salestax phone_expenses other_expenses_presalestax phone_expenses_presalestax other_expenses_national internet_reduction)) {
-        $out->{$name} = ${$name};
-        $self->saveDebugValues("other", $name, ${$name});
+		$self{'out'}->{$name} = ${$name}; 
     }
 
-    foreach my $variable (qw(rent_cost other_expenses_percentage sales_tax_average internet_reduction)) {
-        $self->saveDebugValues("other", $variable, $$variable, 1);
-    }
-
-    return(0);
+    return(%self);
 
 }
 

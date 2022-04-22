@@ -53,9 +53,8 @@
 sub child_care
 {
     my $self = shift;
-    my $in = $self->{'in'};
-    my $out = $self->{'out'};
-    my $dbh = $self->{'dbh'};
+    my $in = $self{'in'};
+    my $out = $self{'out'};
 	
 
 	#Pre-K: There seem to be at least a few NJ pre-k programs that are widely available. This demands additional research, and includes, at least:
@@ -1278,15 +1277,10 @@ sub child_care
 						summerday1care_child5 day2care_child5 summerday2care_child5 day3care_child5 summerday3care_child5 day4care_child5 summerday4care_child5 
 						day5care_child5 summerday5care_child5 day6care_child5 summerday6care_child5 day7care_child5 summerday7care_child5 child1_weekly_cc_hours child2_weekly_cc_hours child3_weekly_cc_hours child4_weekly_cc_hours child5_weekly_cc_hours child1_weekly_cc_hours_summer child2_weekly_cc_hours_summer child3_weekly_cc_hours_summer child4_weekly_cc_hours_summer child5_weekly_cc_hours_summer weeks_off
 						)) { 
-        $out->{$name} = ${$name};
-        $self->saveDebugValues("child_care", $name, ${$name});
+		$self{'out'}->{$name} = ${$name}; 
     }
 
-    foreach my $variable (qw(day1hours day2hours day3hours day5hours day4hours ccdf_fpl ccdf_povlimit spr child_care_days copay_max_percent ccdf_inc ccdf_inc_m ccdf_time spr_all_children spr_all_children_m spr_child1 spr_child2 spr_child3 copay_m ccdf_copay halfday_upk_alt fullday_upk_alt fullday_k_alt summerday1_cc_hours_child1 summerday1_cc_start1_child1 summerday1_cc_end1_child1 summerday1nontrad_cc_hours_child1 day1cost_child1 summerday1cost_child1 userenteredvalues weeks_off childcare_threshold_age_child1 childcare_threshold_age_child2)) { 
-        $self->saveDebugValues("child_care", $variable, $$variable, 1);
-    }
-
-    return(0);
+    return(%self);
 
 }
 
