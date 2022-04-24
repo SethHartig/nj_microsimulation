@@ -25,55 +25,106 @@ sub general {
 
 	# Defining the outputs generated in this module:
 
+	#foreach my $policy_option (qw(sanctioned exclude_abawd_provision covid_medicaid_expansion medicaidchip_all_immigrant_children restore_medicaid_premiums covid_fsp_work_exemption covid_ea_allotment remove_shelter_deduction_cap_alt minben_increase_alt minben_user_input covid_sfsp_sso_expansion covid_eitc_expansion covid_ctc_expansion covid_cdctc_expansion exclude_covid_ptc_expansion covid_ptc_ui_expansion covid_ui_expansion eitc_itin_alt eitc_alt state_eitc_user_input empire_state_ctc_alt tax_credit_alt tax_credit_user_input covid_broadband_benefit child_months_cont_alt months_cont_tanf_user_input onetime_tanfpayment_alt onetime_tanfpayment_user_input pct_increase_tanf_alt pct_increase_tanf_user_input cs_disregard_alt cs_disregard_full_alt housing_subsidy_tanf_alt earnedincome_dis_alt earnedincome_dis_user_input allow_immigrant_tanfeligibility_alt lower_state_workreq lower_state_childunder6_workreq waive_childunder1_workreq covid_ui_disregard expanding_cep_eligiblity_alt weekend_meals_alt ccdf_copay_alt ccdf_threshold_alt ccdf_threshold_user_input)) {
+	#	$in->{$policy_option} = 0;
+	#	if ($in->{'alternate_policy_profile'} ne 'none') {
+	#		$sql = "SELECT ".$in->{'alternate_policy_profile'}." from policy_option_profiles WHERE policy_option = ?";
+	#		my $stmt = $dbh->prepare($sql) ||
+	#			&fatalError("Unable to prepare $sql: $DBI::errstr");
+	#		$stmt->execute($policy_option) ||
+	#			&fatalError("Unable to execute $sql: $DBI::errstr");
+	#		$in->{$policy_option} = $stmt->fetchrow();
+	#	}
+	#}
 
+	#** start csv lookup here. 
+	#CSV lookupsL  something like this, which is the basic set of commands for extracting data from frs_input csv file used in teh runfrsnj.pl file. But this needs work, hence commenting it out for now. If this works, we can make it into a function with arguments in the runfrsnj file.
+	
+	open(TEST3, '<', 'C:\Users\Bank Street\Dropbox\FRS\Perl\NJmicrosimulation\policy_option_profiles.csv') or die "Couldn't open policy options file $!";
+
+	#Chong, this was a preliminary version of the csvlookup function setup that I did, but since it grabs all the variables, it's a bit different than the function I set up. Let's leave it in here for now. 
+	while (my $table_line = <TEST3>) {
+		# For now, during the code debugging phase, I am manually checking each variables needed and assigning its value based on the column in the input CSV code. Eventually, once the input names match, I plan to write a simple script that extracts the values based on column name instead of column number.
+		my @table_fields = split "," , $table_line;
+
+		#Tihs part is using the names in the first row to create a set of input names, and then using the order of those input names to assign the input values of the subsequent rows.
+		if ($. == 1) {
+			my $table_listorder = 0;
+			foreach my $nameofinput (@table_fields) { 
+				$table_data[$table_listorder] = $nameofinput;
+				$table_listorder += 1;
+			}
+		} else {
+
+			my $table_valueorder = 0;
+			foreach my $table_cell (@table_fields) {
+				$table->{$table_data[$table_valueorder]} = $table_cell;
+				if ($table->{'policy_profile'} ne $in->{'alternate_policy_profile'}) {
+					next;
+				} else {
+					$in->{$table_data[$table_valueorder]} = $table_cell;
+					$table_valueorder += 1;	
+				}
+			}			
+		}
+	}
+	close TEST3;
+	#** This ends the CSV lookup and for this table. 	
+
+	#print 'policy_profile ='.$in->{'policy_profile'}."\n"; 
+	#print 'covid_medicaid_expansion ='.$in->{'covid_medicaid_expansion'}."\n"; 
 	#Need to figure out residence value from string data in data file. Note that this is one of the few variables here that is not a replication of the online frs.pm file, as, for the online FRS, residence id # has already been identified as an input through the PHP in the code.
 
-	$sql = "SELECT id from FRS_Locations WHERE state = ? AND year = ? AND name = ?";
-    my $stmt = $dbh->prepare($sql) ||
-        &fatalError("Unable to prepare $sql: $DBI::errstr");
-    my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence_nj'}) ||
-        &fatalError("Unable to execute $sql: $DBI::errstr");
-    $in->{'residence'} = $stmt->fetchrow();
-    $stmt->finish();
+	#This was the experiment I needed to set up the csvlookup function.
+	#if (1 == 0) {
+	#	#** again, csv lookup, but for a table we've used SQL for:
+	#	open(TEST3, '<', $in->{'dir'}.'\FRS_Locations_(NJ_2021)_complete_021122.csv') or die "Couldn't open policy options file $!";
+	#
+	#	while (my $table_line = <TEST3>) {
+	#		# For now, during the code debugging phase, I am manually checking each variables needed and assigning its value based on the column in the input CSV code. Eventually, once the input names match, I plan to write a simple script that extracts the values based on column name instead of column number.
+	#		my @table_fields = split "," , $table_line;
+	#
+	#		#Tihs part is using the names in the first row to create a set of input names, and then using the order of those input names to assign the input values of the subsequent rows.
+	#		if ($. == 1) {
+	#			my $table_listorder = 0;
+	#			foreach my $nameofinput (@table_fields) { 
+	#				$table_data[$table_listorder] = $nameofinput;
+	#				$table_listorder += 1;
+	#			}
+	#		} else {
+	#
+	#			my $table_valueorder = 0;
+	#			foreach my $table_cell (@table_fields) {
+	#				$table->{$table_data[$table_valueorder]} = $table_cell;
+	#				if ($in->{'residence_nj'} ne $table->{'name'} || !$table->{'id'}) {
+	#					$table_valueorder += 1;	
+	#				} else {
+	#					$in->{'residence'} = $table->{'id'};
+	#				}
+	#			}			
+	#		}
+	#	}
+	#	close TEST3;
+	#	#** end csv replication of SQL lookup. This should be made into a "utility function" that appears at the bottom of runfrsnj, programmed to correspond to unique lookups, e.g. $in->{'residence'} = &csvlookup(FRS_Locations_(NJ_2021)_complete_021122.csv, name, $in->{'residence_nj'}, id). The number of arguments could determine how many times a for-loop cycles through the arguemnts to check that the conditions are met.
+	#} else {
+	$in->{'residence'} = &csvlookup($in->{'dir'}.'\FRS_Locations_(NJ_2021)_complete_021122.csv', 'id', 'name', $in->{'residence_nj'});
+	#}
+	
+	#print 'residence_nj ='.$in->{'residence_nj'}."\n"; 
+	#print 'table name ='.$table->{'name'}."\n"; 
+	#print 'residence ='.$in->{'residence'}."\n"; 
+
+	#$sql = "SELECT id from FRS_Locations WHERE state = ? AND year = ? AND name = ?";
+    #my $stmt = $dbh->prepare($sql) ||
+    #    &fatalError("Unable to prepare $sql: $DBI::errstr");
+    #my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence_nj'}) ||
+    #    &fatalError("Unable to execute $sql: $DBI::errstr");
+    #$in->{'residence'} = $stmt->fetchrow();
+    #$stmt->finish();
 
 	#Fill out policy variables from policy_option_profiles lookup sheet.
 	#NOTE TO CHONG: I'm modeling this lookup as if there was a SQL table for this list, so that if you find an easy find-and-replace soluation to chaneg all the SQL queries to csv queries, you can do the same here. There is no table like this in the current FRS MySQL database, though. I know there is also likely an easier way to do this for a csv file, similar to hwo the runfrsnj.pl extracts data from the ACS data sheet.
-
-	foreach my $policy_option (qw(sanctioned exclude_abawd_provision covid_medicaid_expansion medicaidchip_all_immigrant_children restore_medicaid_premiums covid_fsp_work_exemption covid_ea_allotment remove_shelter_deduction_cap_alt minben_increase_alt minben_user_input covid_sfsp_sso_expansion covid_eitc_expansion covid_ctc_expansion covid_cdctc_expansion exclude_covid_ptc_expansion covid_ptc_ui_expansion covid_ui_expansion eitc_itin_alt eitc_alt state_eitc_user_input empire_state_ctc_alt tax_credit_alt tax_credit_user_input covid_broadband_benefit child_months_cont_alt months_cont_tanf_user_input onetime_tanfpayment_alt onetime_tanfpayment_user_input pct_increase_tanf_alt pct_increase_tanf_user_input cs_disregard_alt cs_disregard_full_alt housing_subsidy_tanf_alt earnedincome_dis_alt earnedincome_dis_user_input allow_immigrant_tanfeligibility_alt lower_state_workreq lower_state_childunder6_workreq waive_childunder1_workreq covid_ui_disregard expanding_cep_eligiblity_alt weekend_meals_alt ccdf_copay_alt ccdf_threshold_alt ccdf_threshold_user_input)) {
-		$in->{$policy_option} = 0;
-		if ($in->{'alternate_policy_profile'} ne 'none') {
-			$sql = "SELECT ".$in->{'alternate_policy_profile'}." from policy_option_profiles WHERE policy_option = ?";
-			my $stmt = $dbh->prepare($sql) ||
-				&fatalError("Unable to prepare $sql: $DBI::errstr");
-			$stmt->execute($policy_option) ||
-				&fatalError("Unable to execute $sql: $DBI::errstr");
-			$in->{$policy_option} = $stmt->fetchrow();
-		}
-	}
-	
-	#Alternatively, something like this, which is the basic set of commands for extracting data from frs_input csv file used in teh runfrsnj.pl file. But this needs work, hence commenting it out for now.
-	
-	#open(TEST3, '<', 'C:\Users\Bank Street\Dropbox\FRS\Perl\NJmicrosimulation\policy_option_profiles.csv') or die "Couldn't open policy options file $!";
-	#while (my $line = <TEST3>) {
-		# For now, during the code debugging phase, I am manually checking each variables needed and assigning its value based on the column in the input CSV code. Eventually, once the input names match, I plan to write a simple script that extracts the values based on column name instead of column number.
-	#	my @fields = split "," , $line;
-
-		#Tihs part is using the names in the first row to create a set of input names, and then using the order of those input names to assign the input values of the subsequent rows.
-	#	if ($. == 1) {
-	#		my $listorder = 0;
-	#		foreach my $nameofinput (@fields) { 
-	#			$inputs[$listorder] = $nameofinput;
-	#			$listorder += 1;
-	#		}
-	#	} else {
-	#		my $valueorder = 0;
-	#		foreach my $name (@fields) {
-	#			$self{'in'}->{$inputs[$valueorder]} = $name;
-	#			$valueorder += 1;	
-	#		}
-	#	}
-	#}
-	
+		
   # set general values
     $in->{'child_number'} = 0; 
 	if ($in->{'year'} >= 2020) { #Beginning in 2020, we are allowing users to model families with no children.
@@ -134,13 +185,27 @@ sub general {
     $in->{'parent_number'} = $in->{'family_structure'};
 
   # get the value of the rent -- we need fmr no matter what for the other expenses calculation
-    my $sql = "SELECT rent FROM FRS_Locations WHERE state = ? AND year = ? AND id = ? AND number_children = ?";
-    my $stmt = $dbh->prepare($sql) ||
-        &fatalError("Unable to prepare $sql: $DBI::errstr");
-    my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}, $in->{'child_number'}) ||
-        &fatalError("Unable to execute $sql: $DBI::errstr");
-	$in->{'fmr'} = $stmt->fetchrow();
-    if($in->{'housing_override'})
+  
+	#CHONG, README:
+	#This is the replacement csv lookup function (csvlookup) I've set up to replace all SQL queries. The syntax here is as follows:
+	# The first argument below ($in->{'dir'}.'\FRS_Locations_(NJ_2021)_complete_021122.csv') is the csv file being looked up.
+	# The second argument is the column in the csv that you would like to return.
+	# The succeeding pairs of arguments first indicate the column in the table you want to look up and then the value you want checked in that column (e.g. 'name' and $in->{'residence_nj'} is one pair and listed third and fourth, while 'number_children' and $in->{'child_number'} are a second pair and thus listed fifth and sixth). This corresponds generally with how th MySQL queries are set up.
+	
+	# Looking up state and id are unnecessary, because for this one, they are always 2021 and NJ.
+    $in->{'fmr'} = &csvlookup($in->{'dir'}.'\FRS_Locations_(NJ_2021)_complete_021122.csv', 'rent', 'name', $in->{'residence_nj'}, 'number_children', $in->{'child_number'});
+	
+	if (1 == 0) {
+		#This is the equivalent SQL query that the above csvlookup function replaces.
+		my $sql = "SELECT rent FROM FRS_Locations WHERE state = ? AND year = ? AND id = ? AND number_children = ?";
+		my $stmt = $dbh->prepare($sql) ||
+			&fatalError("Unable to prepare $sql: $DBI::errstr");
+		my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}, $in->{'child_number'}) ||
+			&fatalError("Unable to execute $sql: $DBI::errstr");
+		$in->{'fmr'} = $stmt->fetchrow();
+	}
+	
+	if($in->{'housing_override'})
     {
         $in->{'rent_cost_m'} = $in->{'housing_override_amt'};
 		$in->{'rent_cost'} = 12 *  $in->{'rent_cost_m'};

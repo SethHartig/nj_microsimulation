@@ -59,6 +59,8 @@ use lib 'C:\Users\Bank Street\Dropbox\FRS\Perl\NJmicrosimulation';
 open(TEST1, '<', 'C:\Seth\Bankstreet extra\frs_inputs_1.csv') or die "Couldn't open csv file $!";
 # CHANGE THIS PATH TO WHERE THE OUTPUT FILE IS LOCATED
 open(TEST2, '>', 'C:\Seth\Bankstreet extra\perl_output.csv');
+# ALSO CHANGE THIS PATH TO WHERE THE PERL FILES ARE STORED:
+our $dir = 'C:\Users\Bank Street\Dropbox\FRS\Perl\NJmicrosimulation';
 
 #Set up some random variables so that you can create the %self, %in, and %out hashes:
 our $testinput = 55555;
@@ -69,6 +71,8 @@ our $out = $self{'out'};
 
 #This assignment of teh alternate policy profile may be irrelevant; leaving it in partially because a line like this might be necessary to initially set up the %in hash. Try deleting it once the program works:
 $self{'in'}->{'alternate_policy_profile'} = $alternate_policy_profile; 
+$self{'in'}->{'dir'} = $dir;
+
 
 #Assign how many times (iterations) you want the perl code to increase the earnings of each household, and the amount of each earnings increase (interval):
 our $iterations = 80; # Can eventually make this into an input that can be set by ESI in the input CSV file.
@@ -384,5 +388,50 @@ sub round_to_nearest_50 {
     my($number) = shift;
     $number = $number/50.0;
     return 50 * (($number == int($number)) ? $number : int($number + 1));
+}
+
+sub csvlookup {
+	#look at https://alvinalexander.com/blog/post/perl/how-access-arguments-perl-subroutine-function/
+	#E.g. csvlookup (FRS_Locations_(NJ_2021)_complete_021122.csv, id, name, $in->{'residence_nj'})
+
+	open(CSVLOOKUPTABLE, '<', $_[0]) or die "Couldn't open csv lookup file $!";
+	#The zeroeth argument is the csv file. 
+
+	while (my $table_line = <CSVLOOKUPTABLE>) {
+		my @table_fields = split "," , $table_line;
+
+		#Tihs part is using the names in the first row to create a set of input names, and then using the order of those input names to assign the input values of the subsequent rows.
+		if ($. == 1) {
+			my $table_listorder = 0;
+			foreach my $nameofinput (@table_fields) { 
+				$table_data[$table_listorder] = $nameofinput;
+				$table_listorder += 1;
+			}
+		} else {
+
+			my $table_return = 1;
+			my $table_valueorder = 0;
+			foreach my $table_cell (@table_fields) {
+				$table->{$table_data[$table_valueorder]} = $table_cell;
+				
+				for (my $i = 1; $i <= (scalar(@_) - 2)/2; $i++)	{ #repeat over the number of pairs of table column and variable feeing value of table column. This is half the remaining arguments after teh first two (the csv file and the returning column) are subtracted. E.g. for csvlookup (FRS_Locations_(NJ_2021)_complete_021122.csv, id, name, $in->{'residence_nj'}), this woudl repeat (4 -2) / 2 = 1 time. For csvlookup(FRS_Locations_(NJ_2021)_complete_021122.csv, id, name, $in->{'residence_nj'}, number_children, $in->{'child_number'}), there are 6 areguments, so this would repeat (6 - 2 ) / 2 = 2 times. 
+					#The operator "ne" converts any numbers to strings, so it should work here. But possibly not if I"m not understanding this right.
+					
+					if (!$table->{$_[2*$i]} || !$table->{$_[1]}) { #This checks wehther the variables referred to below are defined.
+						$table_return = 0;
+					} elsif ($_[2*$i + 1] ne $table->{$_[2*$i]}) { #i = 1 corresponds to arguments 3 and 2. i = 2 corresponds to arguments 5 and 4. i =3 corresponds to 7 and 6. And so on.
+					# seeme like the eq and ne 
+						$table_return = 0;
+					}
+				}
+				if ($table_return == 0) {
+					$table_valueorder += 1;	
+				} else {
+					return $table->{$_[1]};
+				}
+			}			
+		}
+	}
+	close CSVLOOKUPTABLE;
 }
 
