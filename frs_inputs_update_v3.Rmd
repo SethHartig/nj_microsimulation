@@ -1,0 +1,439 @@
+---
+title: "Input Update Version 3"
+author: "Chong Li"
+date: "4/23/2022"
+output: html_document
+---
+
+
+### FRS inputs Version 3
+
+#### Document Purposes
+* To make sure that all inputs included in microsimulation is included http://stage.nccp.org/tools/frs/test.php.
+* To make sure that the inputs are coded into needed formats
+  + https://docs.google.com/spreadsheets/d/170XpuxjgfXahEKFkuEzQ9V9mVSt8uW5A/edit#gid=1031769906
+  + https://github.com/chong-cyber/nj_microsimulation/tree/main/NJmicrosimulation
+
+#### Changes made
+* `family_structure`: address the recoding mistake in version 2.
+* `child[i]_age`: QUESTION - there are children whose age greater than 17, mostly in their 20s, what should be done with them?
+* `parent[i]_age`: remove all families with ages greater than 62
+  + The one entry with parent 1 less than 17
+  + add the parent 3 and 4 ages, set them to be default 17.
+* `married`: filtering for only married couples, add a variable call married
+* `child_number`: create variable for number of children
+* `family_size`: create variable for family size
+* `disability_parent[i]` and `disability_child[i]`: add parent 3 and 4 disability to be 0.
+* `cs_flag`: fixed previous errors, only child support for single parent families.
+* `parent1_max_work`: numeric entries; for those who don't work, input 0.
+* `maxshiftlength_parent1`: numeric entries; 
+* `backtobackshifts_parent1`: set them to be integers between 0 to 2.
+* `maxweekendshifts`: set to 1 for those who do have work on weekends
+* `parent1_first_max`: set to the same as parent1_max_work
+* `breadwinner_wkday_hometime`: set to the difference between parent 1 and 2 work hours.
+* `breadwinner_wkend_hometime`: set to 0 for now; no real way to measure weekend hometime.
+* `user_trans_type`: set the NAs to 0s.
+* QUESTION: for the child support section, everything is set as FALSE or 0 and both.
+* QUESTION: for benefits received if eligible, I have entered the benefits as the boxes are ticked on the NCCP website.
+* `child care` section following the guidance on the excel sheet
+* `privateplan_type` changes the NAs to "individual"
+* Add `userplantype`
+* QUESTION `fuel_source` seems to be either electric or gas in the source code, thus changed to these two.
+* Set `override` to be 0s for a number of a different variables.
+* Create `disability_work_expenses_m` variable.
+* Create `wage_1` and `wage_parent2` as fraction of earnings variables.
+* create `parent2_max_work_override_amt`; set it equal to `parent2_max_work`.
+* Set `child_support_paid_m` to 0 for now.
+* Set `heat_in_rent` as 0.
+* Set all `itin` to 0 for now.
+* 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(tidyverse,tidycensus,readxl,patchwork)
+library(reshape2)
+
+census_api_key("e0ff7586a0faf3bf1819178c1392ba6fa3df7ad9")
+```
+
+```{r}
+# Read data
+frs_individuals = read.csv("./data/cleaned_data/acs_individuals.csv")
+frs_df = read.csv("./data/cleaned_data/frs_inputs_2.csv")
+frs_df_old = read.csv("./data/cleaned_data/frs_inputs_1.csv")
+
+pums_19var = pums_variables %>% 
+  filter(survey == "acs1" & year== "2019") %>% 
+  distinct(var_code, .keep_all = T) 
+```
+
+```{r}
+nj_19h = haven::read_sas("./data/unix_hnj/psam_h34.sas7bdat")
+```
+
+```{r family structure}
+# family_structure
+frs_df_fs = frs_df %>%
+  mutate(
+    family_structure = frs_df_old$family_structure
+  ) %>% 
+  mutate(
+    family_structure = ifelse(family_structure == "single-parent", 1, 2)
+  )
+
+```
+
+```{r parent age }
+# remove the parents who are older than 62 years old
+old_parent = frs_df_fs %>%
+  select(SERIALNO, ends_with("age")) %>% 
+  filter(parent1_age > 62 | parent2_age > 62) %>% 
+  distinct(SERIALNO, .keep_all = F)
+
+frs_df_2 = frs_df_fs %>% 
+  filter(!(SERIALNO %in% old_parent$SERIALNO)) %>% 
+  mutate(
+    parent3_age = 17, 
+    parent4_age = 17
+  )
+
+```
+
+```{r married}
+# Only include households that are married
+married_hh = nj_19h %>% 
+  filter(HHT2 == "01" | HHT2 == "06" | HHT2 == "10")
+
+frs_df_3 = frs_df_2 %>% 
+  filter((SERIALNO %in% married_hh$SERIALNO)) %>% 
+  mutate(
+    married = ifelse(family_structure == 1, FALSE, TRUE)
+  )
+```
+
+```{r child number}
+child_num = frs_df_3 %>% 
+  select(SERIALNO,child1_age:child5_age) %>% 
+  pivot_longer(
+    child1_age:child5_age,
+    names_to = "child",
+    values_to = "age"
+  ) %>% 
+  group_by(SERIALNO) %>% 
+  count(kids_num = age != -1) %>% 
+  filter(kids_num == T) 
+
+frs_df_4 = frs_df_3 %>% 
+  mutate(
+    child_number = child_num$n
+  )
+```
+
+```{r family size}
+frs_df_5 = frs_df_4 %>% 
+  mutate(
+    family_size = child_number + family_structure
+  )
+```
+
+```{r disability status}
+frs_df_6 = frs_df_5 %>% 
+  mutate(
+    disability_parent3 = 0,
+    disability_parent4 = 0
+  )
+```
+
+```{r cs_flag}
+cs_fl = frs_df_6 %>% 
+  select(SERIALNO, family_structure, cs_flag) %>% 
+  filter(
+    family_structure == 1
+  ) %>% 
+  select(SERIALNO) %>% 
+  cbind(cs_bin)
+
+frs_df_7 = frs_df_6 %>% 
+  left_join(cs_fl, by =  "SERIALNO")
+
+
+frs_df_8 = frs_df_7 %>% 
+  mutate(
+    cs_flag = 0 
+  ) %>% 
+  mutate(
+    cs_flag = ifelse(is.na(value), cs_flag, value)
+  ) %>% 
+  select(-value)
+```
+
+```{r parent1_max_work}
+frs_df_9 = frs_df_8 %>% 
+  mutate(
+    parent1_max_work = ifelse(is.na(parent1_max_work), 0 , parent1_max_work)
+  )
+
+```
+
+```{r maxshiftlength_parent1}
+frs_df_10 = frs_df_9 %>% 
+  mutate(
+    maxshiftlength_parent1 = as.integer(parent1_max_work/5)
+  ) 
+```
+
+```{r backtobackshifts_parent1}
+frs_df_11 = frs_df_10 %>% 
+  mutate(
+    backtobackshifts_parent1 = ifelse(backtobackshifts_parent1 <= 0, 0, as.integer(backtobackshifts_parent1))
+  )
+```
+
+```{r maxweekndshifts}
+frs_df_12 = frs_df_11 %>% 
+  mutate(
+    maxweekendshifts = ifelse(weekenddaysworked != 0, 1, 0)
+  )
+```
+
+```{r parent1_first_max}
+frs_df_13 = frs_df_12 %>% 
+  mutate(
+    parent1_first_max = parent1_max_work
+    ) 
+```
+
+```{r backtobackshifts_parent2}
+frs_df_14 = frs_df_13 %>% 
+  mutate(
+    backtobackshifts_parent2 = ifelse(is.na(backtobackshifts_parent2),0,as.integer(backtobackshifts_parent2))
+    )
+```
+
+```{r breadwinner_wkday_hometime}
+frs_df_15 = frs_df_14 %>% 
+  mutate(
+    breadwinner_wkday_hometime = ifelse(family_structure == 2, abs(parent1_max_work - parent2_max_work), 0),
+    breadwinner_wkend_hometime = 0
+  ) 
+```
+
+```{r user_trans_type}
+frs_df_16 = frs_df_15 %>% 
+  mutate(
+    user_trans_type = ifelse(is.na(user_trans_type),0, user_trans_type)
+    )
+
+frs_df_16 %>% count(user_trans_type)
+```
+
+```{r child support}
+frs_df_17 = frs_df_16 %>% 
+  mutate(
+    ncparent_earnings = 0,
+    cs_child_number = 0,
+    child1support = FALSE,
+    child2support = FALSE,
+    child3support = FALSE,
+    child4support = FALSE,
+    child5support = FALSE,
+    spousal_sup_cp = 0,
+    spousal_sup_ncp = 0,
+    child_support_ext_cp = 0,
+    child_support_ext_ncp = 0
+  )
+```
+
+```{r benefits received if eligible}
+frs_df_18 = frs_df_17 %>% 
+  mutate(
+    ccdf = 1,fsp = 1,hlth = 1,sec8 = 0,tanf = 0,ctc = 1,eitc = 1,
+    cadc = 1,ssi = 1,lifeline = 1,liheap = 1,wic = 1,prek = 1,ostp = 0,
+    nsbp = 1,frpl = 1,fsmp = 1, premium_tax_credit = 1, ui = 0, headstart = 0, earlyheadstart = 0,
+    state_cadc = 1, state_eitc = 1, prop_tax_credit = 1, state_mctr = 1, fli = 1, tdi = 1
+    
+  )
+```
+
+```{r child care settings}
+# create child_care_nobenfit_estimate_source
+frs_df_19 = frs_df_18 %>% 
+  mutate(
+    child_care_nobenefit_estimate_source = "spr",
+    child_care_continue_estimate_source = "spr"
+  ) 
+
+# create child[i]_nobenefit_setting variables
+c_prefix = paste0("child",1:5)
+df_nobenefit = as.data.frame(matrix(nrow=8133,ncol=5)) 
+colnames(df_nobenefit) = paste(c_prefix,"nobenefit_setting",sep="_") 
+df_nobenefit = df_nobenefit %>% 
+  replace(is.na(.),"accredited_center")
+
+# create child[i]_nobenfit_amt_m variables
+df_no_amt = as.data.frame(matrix(nrow=8133,ncol=5)) 
+colnames(df_no_amt) = paste(c_prefix,"nobenfit_amt_m",sep="_") 
+df_no_amt = df_no_amt %>% 
+  replace(is.na(.),0)
+
+# create child[i]_continue_setting
+df_cont = df_nobenefit %>% 
+  rename_at(1:5, funs(paste(c_prefix,"continue_setting",sep="_")))
+
+# create child[i]_continue_amt_m variables
+df_cont_amt = df_no_amt %>% 
+  rename_at(1:5, funs(paste(c_prefix,"continue_amt_m",sep="_")))
+
+# create child[i]_withbenefit_setting
+df_bene = df_nobenefit %>% 
+  rename_at(1:5, funs(paste(c_prefix,"withbenefit_setting",sep="_")))
+
+# create child[i]_continue_flag
+df_cont_fl = df_cont_amt %>% 
+  rename_at(1:5, funs(paste(c_prefix,"continue_flag",sep="_")))
+
+frs_df_19.1 = frs_df_19 %>% 
+  cbind(df_nobenefit,df_no_amt,df_cont,df_cont_amt,df_bene,df_cont_fl)
+```
+
+```{r private_plan_type}
+frs_df_20 = frs_df_19.1 %>% 
+  mutate(
+    privateplan_type = ifelse(is.na(privateplan_type), "individual", "employer"),
+    userplantype = "employer"
+    )
+```
+
+```{r fuel_source}
+frs_df_21 = frs_df_20 %>% 
+  mutate(
+    fuel_source = case_when(
+      fuel_source == 1 ~ "gas",
+      fuel_source == 2 ~ "gas",
+      fuel_source == 3 ~ "electricity"
+    )
+  ) %>% 
+  mutate(
+    fuel_source = ifelse(is.na(fuel_source), "other", fuel_source)
+  ) 
+
+```
+
+```{r overrides}
+frs_df_22 = frs_df_21 %>% 
+  mutate(
+    food_override = 0,
+    trans_override = 0,
+    other_override = 0
+  )
+
+```
+
+```{r disability work expenses}
+frs_df_23 = frs_df_22 %>% 
+  mutate(
+    disability_work_expenses_m = disability_personal_expenses_m/2
+  )
+```
+
+```{r wage variables}
+frs_df_24 = frs_df_23 %>% 
+  mutate(
+    wage_1 = earnings_initial * 0.6,
+    wage_parent2 = earnings_initial * 0.4
+    ) 
+```
+
+```{r parent2_max_work_override_amt}
+frs_df_25 = frs_df_24 %>% 
+  mutate(
+    parent2_max_work_override_amt = parent2_max_work,
+    child_support_paid_m = 0
+  )
+```
+
+```{r additional variables to be set to 0}
+frs_df_26 = frs_df_25 %>% 
+  mutate(
+    heat_in_rent = 0,
+    headstart = 0,
+    earlyheadstart = 0,
+    prop_tax_credit = 0,
+    food_override_amt = 0
+  )
+```
+
+```{r maxworkweek_parent2}
+frs_df_27 = frs_df_26 %>% 
+  mutate(
+    maxworkweek_parent2 = as.integer(parent2_max_work/8),
+    maxworkweek_parent2 = ifelse(maxworkweek_parent2 > 7, 7, maxworkweek_parent2)
+  ) 
+```
+
+```{r immigration status}
+frs_df_28 =frs_df_27 %>% 
+  mutate(
+    across(child1_immigration_status:child5_immigration_status, 
+           ~case_when(.x == 1 ~ "US Born",
+                      .x == 2 ~ "US Territory Born",
+                      .x == 3 ~ "Oversea Born US Citizen",
+                      .x == 4 ~ "naturalized citizen",
+                      .x == 5 ~"non-citizen",
+                      .x == -9 ~ "0"))
+  ) %>% 
+  mutate(
+    parent1_immigration_status = immigration,
+    parent2_immigration_status = immigration,
+    itin = 0
+  ) 
+```
+
+```{r felony status}
+frs_df_29 = frs_df_28 %>% 
+  mutate(
+    parent1_felony_conviction_status = NA
+    ,parent2_felony_conviction_status = NA
+    )
+```
+
+```{r out of pocket healthcare costs}
+frs_df_30 = frs_df_29 %>% 
+  mutate(
+    fli = 0,
+    tdi = 0,
+    parent1_hlth_costs_oop_m = hlth_costs_oop_m,
+    parent2_hlth_costs_oop_m = 0,
+    child1_hlth_costs_oop_m = 0,
+    child2_hlth_costs_oop_m = 0,
+    child3_hlth_costs_oop_m = 0,
+    child4_hlth_costs_oop_m = 0,
+    child5_hlth_costs_oop_m = 0,
+  ) 
+```
+
+```{r}
+frs_df_30 %>% 
+  mutate(
+    other_override_amt = 0
+  ) %>% 
+  select(other_override_amt, snap_training, tanfwork, fullday_prek, fullday_k, recent_tanf_exit_flag)
+```
+
+```{r tanf receipients}
+tanf_recp = frs_individuals %>% 
+  select(SERIALNO, PAP) %>% 
+  filter(PAP > 0) %>% 
+  distinct(SERIALNO, .keep_all = T)
+
+frs_df_31 = frs_df_30 %>% 
+  left_join(tanf_recp, by = "SERIALNO") %>% 
+  mutate(
+    recent_tanf_exit_flag = ifelse(is.na(PAP), 0, 1)
+  ) %>% 
+  select(-PAP)
+```
+
+```{r}
+write.csv(frs_df_31, "./data/cleaned_data/frs_inputs_3.csv", row.names = F)
+```
+
