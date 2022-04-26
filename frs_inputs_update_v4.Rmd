@@ -1,0 +1,146 @@
+---
+title: "Input Update Version 4"
+author: "Chong Li"
+date: "4/26/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(tidyverse,tidycensus,readxl,patchwork)
+library(reshape2)
+
+census_api_key("e0ff7586a0faf3bf1819178c1392ba6fa3df7ad9")
+```
+
+### FRS inputs Version 4
+
+#### Document Purposes
+* To make sure that all inputs included in microsimulation is included http://stage.nccp.org/tools/frs/test.php.
+* To make sure that the inputs are coded into needed formats
+  + https://docs.google.com/spreadsheets/d/170XpuxjgfXahEKFkuEzQ9V9mVSt8uW5A/edit#gid=1031769906
+  + https://github.com/chong-cyber/nj_microsimulation/tree/main/NJmicrosimulation
+  
+  
+#### Changes to variables
+
+* Recode `state` to be "NJ"
+* Remove children whose age that are above 18 years old. There are only 7412 entries left, down from 8133 originally.
+
+```{r}
+# Read data
+frs_individuals = read.csv("./data/cleaned_data/acs_individuals.csv")
+frs_df = read.csv("./data/cleaned_data/frs_inputs_3.csv")
+frs_df_old = read.csv("./data/cleaned_data/frs_inputs_1.csv")
+
+pums_19var = pums_variables %>% 
+  filter(survey == "acs1" & year== "2019") %>% 
+  distinct(var_code, .keep_all = T) 
+```
+  
+```{r ST}
+frs_df1 = frs_df %>% 
+  mutate(
+    state = "NJ"
+  )
+```
+
+```{r exclude older children}
+frs_df2 = frs_df1 %>% 
+  filter(
+    child1_age < 18 & child2_age < 18 & child3_age < 18 & child4_age < 18 & child5_age < 18
+  ) 
+```
+
+```{r cs_flag, nontraditionalwork}
+frs_df3 = frs_df2 %>% 
+  mutate(
+    cs_flag = 0,
+    nontraditionalwork = 1
+  )
+```
+
+```{r maxweekendshifts}
+frs_df4 = frs_df3 %>% 
+  mutate(
+    maxweekendshifts = ifelse(maxweekendshifts == 1, 2, 0)
+  )
+```
+
+```{r user_trans_type}
+frs_old2 = read.csv("./data/cleaned_data/frs_inputs_1.csv")
+
+old_trans = frs_old2 %>% 
+  select(SERIALNO, user_trans_type)
+
+frs_df5 = frs_df4 %>% 
+  select(-user_trans_type) %>% 
+  left_join(old_trans, by = "SERIALNO") %>% 
+  mutate(
+    user_trans_type = case_when(user_trans_type == 1 ~ "car",
+                                user_trans_type == 8 ~ "car",
+                                user_trans_type == 9 ~ "car", 
+                                user_trans_type == 3 ~"public",
+                                user_trans_type == 4 ~"public",
+                                user_trans_type == 5 ~"public",
+                                user_trans_type == 6 ~"public",
+                                user_trans_type == 7 ~"public")
+  ) %>% 
+  mutate(
+    user_trans_type = ifelse(is.na(user_trans_type),"other",user_trans_type)
+  ) 
+```
+
+```{r hlth_costs_oop_m}
+frs_df6 = frs_df5 %>% 
+  mutate(
+    hlth_costs_oop_m = hlth_costs_oop_m/12
+  ) 
+```
+
+```{r}
+nj_19h = haven::read_sas("./data/unix_hnj/psam_h34.sas7bdat")
+```
+
+```{r}
+hh_income = nj_19h %>% 
+  select(SERIALNO, HINCP)
+
+
+frs_df7 = frs_df6 %>% 
+  left_join(hh_income, by = "SERIALNO") %>% 
+  mutate(
+    earnings_initial = HINCP
+  ) %>% 
+  select(-HINCP)
+
+frs_df7 %>% 
+  ggplot(aes(x=earnings_initial)) + geom_histogram()
+```
+
+```{r}
+frs_df8 = frs_df7 %>% 
+  mutate(
+    # earnings and work hours initial
+    parent1_earnings_initial = ifelse(family_structure == 2, earnings_initial * 0.6, earnings_initial),
+    parent2_earnings_initial = ifelse(family_structure == 2, earnings_initial * 0.4, 0),
+    parent2_workhours_initial = parent2_max_work_override_amt,
+    parent1_workhours_initial = parent1_max_work
+  ) %>% 
+  mutate(
+    wage_1 = ifelse(parent1_workhours_initial == 0, 13, round(parent1_earnings_initial/(52*parent1_workhours_initial),2)),
+    wage_parent2 = ifelse(parent2_workhours_initial == 0, 13, round(parent2_earnings_initial/(52*parent2_workhours_initial),2)),
+  ) %>% 
+  mutate(
+    parent2_max_work_override_amt = ifelse(parent2_workhours_initial < 40, 40, parent2_workhours_initial),
+    parent1_max_work = ifelse(parent1_workhours_initial < 40, 40, parent1_workhours_initial)
+  ) %>% 
+  select(SERIALNO, parent1_earnings_initial, parent2_earnings_initial, parent1_workhours_initial, parent2_workhours_initial, parent1_max_work, parent2_max_work_override_amt)
+
+```
+
+
+```{r}
+write.csv(frs_df8, "./data/cleaned_data/frs_inputs_4.csv", row.names = F)
+```
+
