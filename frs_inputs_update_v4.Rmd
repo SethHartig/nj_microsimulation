@@ -134,11 +134,13 @@ frs_df8 = frs_df7 %>%
   mutate(
     parent2_max_work_override_amt = ifelse(parent2_workhours_initial < 40, 40, parent2_workhours_initial),
     parent1_max_work = ifelse(parent1_workhours_initial < 40, 40, parent1_workhours_initial)
-  ) %>% 
-  select(SERIALNO, parent1_earnings_initial, parent2_earnings_initial, parent1_workhours_initial, parent2_workhours_initial, parent1_max_work, parent2_max_work_override_amt)
+  ) 
 
 ```
 
+```{r}
+frs_df8 %>% head()
+```
 
 ```{r}
 write.csv(frs_df8, "./data/cleaned_data/frs_inputs_4.csv", row.names = F)
