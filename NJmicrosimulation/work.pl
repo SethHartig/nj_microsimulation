@@ -339,13 +339,26 @@ sub work {
 	# determine transportation costs
 
 	# look up value of avg_miles_driven from locations table
-	my $sql = "SELECT trans_type, percent_nonsocial, percent_work, FRS_Transportation_v2.avg_miles_driven, publictrans_cost_d, publictrans_cost_max, publictrans_cost_d_dis, publictrans_cost_max_dis FROM FRS_Locations LEFT JOIN FRS_Transportation_v2 USING (residence_size, year) WHERE state = ? && year = ? && id = ?";
-	my $stmt = $dbh->prepare($sql) ||
-		&fatalError("Unable to prepare $sql: $DBI::errstr");
-	$stmt->execute($in->{"state"}, $in->{"year"}, $in->{"residence"}) ||
-		&fatalError("Unable to execute $sql: $DBI::errstr");
-	($trans_type, $percent_nonsocial, $percent_work, $avg_miles_driven, $publictrans_cost_d, $publictrans_cost_max, $publictrans_cost_d_dis, $publictrans_cost_max_dis) = $stmt->fetchrow();
-	$stmt->finish();
+
+	 
+	foreach my $datum (qw(trans_type residence_size publictrans_cost_d publictrans_cost_max  publictrans_cost_d_dis publictrans_cost_max_dis)) {	
+		$in->{$datum} = &csvlookup($in->{'dir'}.'\FRS_Locations.csv', $datum, 'id', $in->{'residence'});
+	}
+	$residence_size = $in->{$datum};
+
+	foreach my $datum (qw(percent_nonsocial percent_work avg_miles_driven)) {	
+		$in->{$datum} = &csvlookup($in->{'dir'}.'\FRS_Transportation_v2.csv', $datum, 'size', $in->{'residence_size'});
+	}
+
+	if (1 == 0) { #EquivalentSQL
+		my $sql = "SELECT trans_type, percent_nonsocial, percent_work, FRS_Transportation_v2.avg_miles_driven, publictrans_cost_d, publictrans_cost_max, publictrans_cost_d_dis, publictrans_cost_max_dis FROM FRS_Locations LEFT JOIN FRS_Transportation_v2 USING (residence_size, year) WHERE state = ? && year = ? && id = ?";
+		my $stmt = $dbh->prepare($sql) ||
+			&fatalError("Unable to prepare $sql: $DBI::errstr");
+		$stmt->execute($in->{"state"}, $in->{"year"}, $in->{"residence"}) ||
+			&fatalError("Unable to execute $sql: $DBI::errstr");
+		($trans_type, $percent_nonsocial, $percent_work, $avg_miles_driven, $publictrans_cost_d, $publictrans_cost_max, $publictrans_cost_d_dis, $publictrans_cost_max_dis) = $stmt->fetchrow();
+		$stmt->finish();
+	}
 	
 	#Temporary correction until MySQL error is fixed to make these numnbers annual instead of monthly:
 	$publictrans_cost_max = $publictrans_cost_max  * 12;
@@ -387,13 +400,15 @@ sub work {
 			#We figure otu public transportation costs. But following a similar methodology as above, we need to assume that famlies are using public transportation for other activities like food shopping, going to the doctor, etc. 
 			
 
-			my $sql = "SELECT residence_size FROM FRS_Locations WHERE state = ? && year = ? && id = ?"; # id or residence?
-			my $stmt = $dbh->prepare($sql) ||
-				&fatalError("Unable to prepare $sql: $DBI::errstr");
-			$stmt->execute($in->{'state'}, $in->{'year'},  $in->{'residence'}) ||
-				&fatalError("Unable to execute $sql: $DBI::errstr");
-			$residence_size = $stmt->fetchrow();
-
+			if (1 == 0) { #EquivalentSQL. Calcualted residence_size with the rest of csvlookups above.
+				my $sql = "SELECT residence_size FROM FRS_Locations WHERE state = ? && year = ? && id = ?"; # id or residence?
+				my $stmt = $dbh->prepare($sql) ||
+					&fatalError("Unable to prepare $sql: $DBI::errstr");
+				$stmt->execute($in->{'state'}, $in->{'year'},  $in->{'residence'}) ||
+					&fatalError("Unable to execute $sql: $DBI::errstr");
+				$residence_size = $stmt->fetchrow();
+			}
+			
 			# Then we calculate the portion of total trips using National Transportation Survey data that the family takes using public transportation, separate from work or other social activities. We should really use SQL for this but doing it in Perl in the interest of expediency.
 			if ($residence_size eq 'upto250000') {
 				$nonsocialnonwork_portion_public = 0.519;
@@ -439,7 +454,7 @@ sub work {
  	}
 
 	# outputs
-	foreach my $name (qw(parent_workhours_w parent1_employedhours parent2_employedhours parent1_earnings parent2_earnings trans_expenses parent1_transhours_w parent2_transhours_w parent_workhours_w 
+	foreach my $name (qw(parent_workhours_w parent1_earnings parent2_earnings trans_expenses parent1_transhours_w parent2_transhours_w parent_workhours_w 
 						parent1_employedhours_w parent2_employedhours_w shifts_parent1 shifts_parent2 transshifts_parent1 transshifts_parent2 multipleshifts_parent1 multipleshifts_parent2 parent_otherhours_w 
 						caregiver_workshifts_w caregiver_maxworkweek caregiver_maxshiftlength caregiver_backtobackshifts)) { 
 		$self{'out'}->{$name} = ${$name}; 

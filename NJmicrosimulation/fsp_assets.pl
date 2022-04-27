@@ -86,7 +86,8 @@ sub fsp_assets
 	#Inputs or outputs generated in code below
 	our $pha_ua = 0; # Estimating or incorporating energy costs is important for estimating SNAP becuase we the fair market rents we use incorporate utilities, but SNAP calculations separate rent from utilities. So we need to separate rent from utilities here as well. These estimations vary by state but this variable is used in the upcoming FSP code.
 	#For at least the MTRC, starting with Allegheny County, we are moving away from relying on PHA UAs for estimating utility costs. Most people using this tool for their own situations will likely be entering their own costs anyway. But relying on PHA UAs has also become problematic because it require digging deep into not commonly available public information, especially for large states with many PHAs. So we are moving toward a more general approach of just incorporating average gas and electric costs makes sense. Perhaps we could also adjust these based on the difference between fair market rent and the median or average bedroom size of a state or at the national level.
-
+	our $pha_region = 0; 
+	
 	our $tanf_recd = $out->{'tanf_recd'}; #MAY MOVE THIS LATER. See below note for why we are redefining tanf_reced in this code.
 	our $tanf_housing_subsidy_alt = 200;	# a policy modeling option for NJ 2021. 
 	
@@ -108,7 +109,7 @@ sub fsp_assets
 	}	
 
   # outputs
-    foreach my $name (qw(fs_vehicle1 fs_vehicle2 bbce_gross_income_pct bbce_no_asset_limit bbce_disability_no_asset_limit bbce_asset_limit  bbce_no_netincome_limit bbce_categorical_no_netincome_limit heatandeat_nominal_payment optional_sua_policy wic_elig_nslp pha_ua pha_region sua_heat sua_utilities_only average_naturalgas_cost average_electric_cost sua_phoneandinternet_only snap_state_immigrant_option ineligible_immigrant_prorata_grossincome ineligible_immigrant_prorata_netincome tanf_recd bbce_policy snap_foster_child_option wic_denial_unqualified_immigrants )) {
+    foreach my $name (qw(fs_vehicle1 fs_vehicle2 bbce_gross_income_pct bbce_no_asset_limit bbce_disability_no_asset_limit bbce_asset_limit  bbce_no_netincome_limit bbce_categorical_no_netincome_limit heatandeat_nominal_payment optional_sua_policy wic_elig_nslp pha_ua pha_region sua_heat sua_utilities_only average_naturalgas_cost average_electric_cost sua_phoneandinternet_only snap_state_immigrant_option ineligible_immigrant_prorata_grossincome ineligible_immigrant_prorata_netincome tanf_recd snap_foster_child_option wic_denial_unqualified_immigrants )) {
 		         
 		$self{'out'}->{$name} = ${$name}; 
     }

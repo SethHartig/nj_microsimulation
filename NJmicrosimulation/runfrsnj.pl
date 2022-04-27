@@ -56,7 +56,7 @@ print "mode=".$mode."\n";
 # CHANGE THIS PATH TO WHERE THE PERL FILES ARE STORED:
 use lib 'C:\Users\Bank Street\Dropbox\FRS\Perl\NJmicrosimulation';
 # CHANGE THIS PATH TO WHERE THE SOURCE FILE (THE FILE WITH INPUTS) IS LOCATED:
-open(TEST1, '<', 'C:\Seth\Bankstreet extra\frs_inputs_1.csv') or die "Couldn't open csv file $!";
+open(TEST1, '<', 'C:\Seth\Bankstreet extra\frs_inputs_4.csv') or die "Couldn't open csv file $!";
 # CHANGE THIS PATH TO WHERE THE OUTPUT FILE IS LOCATED
 open(TEST2, '>', 'C:\Seth\Bankstreet extra\perl_output.csv');
 # ALSO CHANGE THIS PATH TO WHERE THE PERL FILES ARE STORED:
@@ -147,7 +147,8 @@ while (my $line = <TEST1>) {
 		}
 		
 		our $single_complete_flag = 0;
-		next if (($mode eq 'single' || $mode eq 'run') && $self{'in'}->{'SERIALNO'} != $single_casekey);
+		next if (($mode eq 'single' || $mode eq 'run') && $self{'in'}->{'SERIALNO'} ne $single_casekey);
+		#NOT SURE WHY, but error of undefined values at 150 seems to be resolved when adding in a column of dummy (id) numbers in front of the SERIALNO field. Come back to this.
 		
 		#The following chunks of commented-out perl code are examples of variable corrections that were needed for the NH 2021 microsimulation project that this perl code was initially written for. If all variables needed for Perl to run the FRS perl modules have been adjusted to match what the online FRS uses to generate FRS output, none of these adjustments will be needed. That is the ideal situation, although the below commented-out code should provide some examples of how data can be adjusted prior to to running the FRS perl modules if needed.
 		
@@ -218,9 +219,8 @@ while (my $line = <TEST1>) {
 			#RUNNING THE PERL MODULES OF EXPENSES AND BENEFITS:
 			
 			#We now set up the order of functions to be executed as defined in the FRS's defaults function, replicated below. The NJ defaults.pl file and upcoming associated technical documentaiton describe why this spsecific order, and adjustemnts to that order based on disabiltiy or child support are necessary for our calcualtions.
-			my @order = qw(interest parent_earnings fostercare fli_tdi ssdi unemployment child_care ssp ssi fed_hlth_insurance hlth child_support tanf work child_care ccdf hlth sec8 fsp_assets liheap fsp work afterschool schoolsummermeals wic fedtax eitc  payroll ctc statetax food lifeline salestax other); 
-			
-			if ($self{'in'}->{'cs_flag'} == 1 || $self{'in'}->{'disability_child1'} + $self{'in'}->{'disability_child2'} + $self{'in'}->{'disability_child3'} + $self{'in'}->{'disability_child4'} + $self{'in'}->{'disability_child5'} > 0) { 
+			my @order = qw(interest parent_earnings fostercare fli_tdi ssdi unemployment child_care ssp ssi fed_hlth_insurance hlth child_support tanf work child_care  ccdf hlth sec8 fsp_assets liheap fsp work afterschool schoolsummermeals wic fedtax eitc payroll ctc statetax food lifeline salestax other);
+			if ($self{'in'}->{'cs_flag'} == 1 || $self{'in'}->{'disability_child1'} + $self{'in'}->{'disability_child2'} + $self{'in'}->{'disability_child3'} + $self{'in'}->{'disability_child4'} + $self{'in'}->{'disability_child5'} > 0) {
 				if ($self{'in'}->{'disability_child1'} + $self{'in'}->{'disability_child2'} + $self{'in'}->{'disability_child3'} + $self{'in'}->{'disability_child4'} + $self{'in'}->{'disability_child5'} > 0)	{
 					push @order, qw(ssi fed_hlth_insurance hlth);
 				}
@@ -295,17 +295,19 @@ while (my $line = <TEST1>) {
 			#require "salestax_nh.pl";
 			#salestax(%self);
 
+
+			#set debt_payment to a yearly value, instead of monthly. Placing this here instead of the modules is a legacy of the frs codes. It's fairly superflous that it's here. Should probably be in the interest module but keeping it in here to keep the interest.pl code matching to the online version.
+			$out->{'debt_payment'} = 12 * $in->{'debt_payment'};
+
 			#Once the above modules are run, we calculate total expenses, total resources, and net resources, per family, per income level.	
 
-			$self{'out'}->{'income'} = &round($out->{'earnings'} + $out->{'child_support_recd'} + $out->{'interest'} + $out->{'tanf_recd'} + $out->{'ssi_recd'} + $out->{'fsp_recd'} + $out->{'federal_tax_credits'} + $out->{'state_tax_credits'} + $out->{'local_tax_credits'} + $out->{'fli_plus_tdi_recd'} + $out->{'foster_child_payment'});
+			$self{'out'}->{'income'} = &round($out->{'earnings'} + $out->{'child_support_recd'} + $out->{'interest'} + $out->{'tanf_recd'} + $out->{'ssi_recd'} + $out->{'fsp_recd'} + $out->{'federal_tax_credits'} + $out->{'state_tax_credits'} + $out->{'local_tax_credits'}  + $out->{'fli_plus_tdi_recd'} + $out->{'foster_child_payment'});
 			
-			$self{'out'}->{'expenses'} = &round($out->{'tax_before_credits'} + $out->{'payroll_tax'} + $out->{'salestax'} + $out->{'rent_paid'} + $out->{'child_care_expenses'} + $out->{'food_expenses'} + $out->{'trans_expenses'} + $out->{'other_expenses'} + $out->{'health_expenses'} + $out->{'disability_expenses'} + $out->{'afterschool_expenses'} + $out->{'debt_payment'});
-		
-			$self{'out'}->{'net_resources'} = $out->{'income'} - $out->{'expenses'};
+			$self{'out'}->{'expenses'} = &round($out->{'tax_before_credits'} + $out->{'payroll_tax'} + $out->{'salestax'} + $out->{'rent_paid'} + $out->{'child_care_expenses'} + $out->{'food_expenses'} + $out->{'trans_expenses'}  + $out->{'other_expenses'} + $out->{'health_expenses'} + $out->{'disability_expenses'} + $out->{'afterschool_expenses'} + $out->{'debt_payment'});
 
+			$self{'out'}->{'net_resources'} = $out->{'income'} - $out->{'expenses'};
 			#Now we print the above list of inputs to the CSV file. Whether this is desired or not in terms of the final product depends on whether we want to append the existing csv file with the output file, or to simply reproduce the input file based on what inputs are needed to return the outputs, and the variable names the FRS files use. 
 			#Printing the above lists of outputs to the CSV file or the command line:
-
 			
 			if ($mode eq 'full' || $mode eq 'range') {
 				print TEST2 $out->{'earnings'}.",";
@@ -390,6 +392,9 @@ sub round_to_nearest_50 {
     return 50 * (($number == int($number)) ? $number : int($number + 1));
 }
 
+#IMPORTANT NOTE: FOR ANY LOOKUP WITH THESE VARIABLES, NEED TO ADD A COMMA AT THE END OF EVERY LINE. It cannot be a blank space before the next line.
+#OTHER IMPORTANT NOTE: There must also be a line filled in at the bottom of every csv, otherwise the search stops at the second-to-last line. I have no idea why that is, but adding in a dummy last line to all the csv files seem like it is the solutoin here, weirdly. Worth investigating further.
+
 sub csvlookup {
 	#look at https://alvinalexander.com/blog/post/perl/how-access-arguments-perl-subroutine-function/
 	#E.g. csvlookup (FRS_Locations_(NJ_2021)_complete_021122.csv, id, name, $in->{'residence_nj'})
@@ -404,7 +409,7 @@ sub csvlookup {
 		if ($. == 1) {
 			my $table_listorder = 0;
 			foreach my $nameofinput (@table_fields) { 
-				$table_data[$table_listorder] = $nameofinput;
+				$table_data[$table_listorder] = $nameofinput; 
 				$table_listorder += 1;
 			}
 		} else {
@@ -412,7 +417,7 @@ sub csvlookup {
 			my $table_return = 1;
 			my $table_valueorder = 0;
 			foreach my $table_cell (@table_fields) {
-				$table->{$table_data[$table_valueorder]} = $table_cell;
+				$table->{$table_data[$table_valueorder]} = $table_cell; 
 				
 				for (my $i = 1; $i <= (scalar(@_) - 2)/2; $i++)	{ #repeat over the number of pairs of table column and variable feeing value of table column. This is half the remaining arguments after teh first two (the csv file and the returning column) are subtracted. E.g. for csvlookup (FRS_Locations_(NJ_2021)_complete_021122.csv, id, name, $in->{'residence_nj'}), this woudl repeat (4 -2) / 2 = 1 time. For csvlookup(FRS_Locations_(NJ_2021)_complete_021122.csv, id, name, $in->{'residence_nj'}, number_children, $in->{'child_number'}), there are 6 areguments, so this would repeat (6 - 2 ) / 2 = 2 times. 
 					#The operator "ne" converts any numbers to strings, so it should work here. But possibly not if I"m not understanding this right.
@@ -427,11 +432,82 @@ sub csvlookup {
 				if ($table_return == 0) {
 					$table_valueorder += 1;	
 				} else {
-					return $table->{$_[1]};
+					my $output = $table->{$_[1]};
+					@table_fields = ();
+					@table_data = ();
+					close CSVLOOKUPTABLE;
+					return $output ;
 				}
 			}			
 		}
 	}
-	close CSVLOOKUPTABLE;
+}
+
+sub csvlookup_ops {
+	#E.g. csvlookup_ops ($in->{'dir'}.'\FRS_Food.csv', 'cost', 'age_min', '<=', $in->{'child1_age'}, 'age_max', '>=', $in->{'child1_age'}). Should be similar to the above but with conditions to account for 'eq', '<', '>', '<=', and '>='. 
+
+	open(CSVLOOKUPTABLE, '<', $_[0]) or die "Couldn't open csv lookup file $!";
+	#The zeroeth argument is the csv file. 
+
+	while (my $table_line = <CSVLOOKUPTABLE>) {
+		my @table_fields = split "," , $table_line;
+
+		#Tihs part is using the names in the first row to create a set of input names, and then using the order of those input names to assign the input values of the subsequent rows.
+		if ($. == 1) {
+			my $table_listorder = 0;
+			foreach my $nameofinput (@table_fields) { 
+				$table_data[$table_listorder] = $nameofinput; 
+				$table_listorder += 1;
+			}
+		} else {
+
+			my $table_return = 1;
+			my $table_valueorder = 0;
+			foreach my $table_cell (@table_fields) {
+				$table->{$table_data[$table_valueorder]} = $table_cell; 
+				
+				for (my $i = 1; $i <= (scalar(@_) - 2)/3; $i++)	{ #repeat over the number of triplets of table column, operation (e.g. '>=', and variable feeing value of table column. This is one third of the remaining arguments after the first two (the csv file and the returning column) are subtracted. E.g. for csvlookup_ops ($in->{'dir'}.'\FRS_Food.csv', 'cost', 'age_min', '<=', $in->{'child1_age'}, 'age_max', '>=', $in->{'child1_age'}), this would repeat (8 -2) / 3 = 2 times. 
+					#The operator "ne" converts any numbers to strings, still. 
+					
+					if (!$table->{$_[3*$i-1]} || !$table->{$_[1]}) { #This checks wehther the variables referred to below are defined. $_[1] is the variable in the column we want to return. $_[3*$i-1]] refers to teh argument we are testing, which will be placed in the argument order as 2, 5, 8, 11, etc.
+						$table_return = 0;
+					} elsif ($_[3*$i] eq 'eq') {						 
+						if ($table->{$_[3*$i-1]} ne $_[3*$i + 1]) { #i = 1 corresponds to arguments 2,3, and 4. i = 2 corresponds to arguments 5, 6, and 7. i =3 corresponds to 8,9, and 10. And so on. (in replicating csvlookup, I switched the order of this so that it matches the syntax of inqeualities rather than reverses them.)
+						# seeme like the eq and ne 
+							$table_return = 0;
+						}
+					} elsif ($_[3*$i] eq '<') {						 
+						if ($table->{$_[3*$i-1]} >= $_[3*$i + 1]) { 
+							$table_return = 0;
+						}
+					} elsif ($_[3*$i] eq '<=') {						 
+						if ($table->{$_[3*$i-1]} > $_[3*$i + 1]) { 
+							$table_return = 0;
+						}
+					} elsif ($_[3*$i] eq '>') {						 
+						if ($table->{$_[3*$i-1]} <= $_[3*$i + 1]) { 
+							$table_return = 0;
+						}
+					} elsif ($_[3*$i] eq '>=') {						 
+						if ($table->{$_[3*$i-1]} < $_[3*$i + 1]) { 
+							$table_return = 0;
+						}
+					}
+				}
+				if ($table_return == 0) {
+					$table_valueorder += 1;	
+				} else {
+					my $output = $table->{$_[1]};
+					@table_fields = ();
+					@table_data = ();
+					close CSVLOOKUPTABLE;
+					return $output ;
+				}
+			}
+			if ($table_return == 0) { #If it gets here without returning a value, the lookup has not worked.
+				#print "csvlookup_ops failed for ".$_[1];
+			}
+		}
+	}
 }
 

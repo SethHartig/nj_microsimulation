@@ -76,7 +76,7 @@
 #		foster_child_payment_m
 #=============================================================================#
 
-use Switch;
+#use Switch; #Commenting this out but also think it can probably be commented out in the online FRS. We've simplified this to the extent that Switch functions are likely no longer needed.
 
 sub fsp {
     my $self = shift;

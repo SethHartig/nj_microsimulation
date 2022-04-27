@@ -284,12 +284,18 @@ sub hlth
 	if ($in->{'hlth'} == 0 && $in->{'premium_tax_credit'} == 0) { 
 		if ($in->{'privateplan_type'} eq 'employer'){
 			#Setting residence to 1 for now because have made employer codes all state-specific, as they are in MEPS. If residence can be removed from this lookup, do that.
-			my $sql = "SELECT parent_cost, family_cost FROM FRS_Health WHERE state = ? && year = ? && family_structure = ? && child_number = ? && plan_type = ? && residence = ?";
-			my $stmt = $dbh->prepare($sql) ||
-				&fatalError("Unable to prepare $sql: $DBI::errstr");
-			$stmt->execute($in->{'state'}, $in->{'year'}, $in->{'family_structure'}, $in->{'child_number'}, $in->{'privateplan_type'}, 1) ||
-				&fatalError("Unable to execute $sql: $DBI::errstr");
-			($parent_cost, $family_cost) = $stmt->fetchrow();
+			foreach my $datum (qw(parent_cost family_cost)) {	
+				$in->{$datum} = &csvlookup($in->{'dir'}.'\FRS_health.csv', $datum, 'family_structure', $in->{'family_structure'}, 'child_number', $in->{'child_number'}, 'plan_type', $in->{'privateplan_type'}, 'residence', 1);
+			}
+
+			if (1 == 0) {	#EquivalentSQL:
+				my $sql = "SELECT parent_cost, family_cost FROM FRS_Health WHERE state = ? && year = ? && family_structure = ? && child_number = ? && plan_type = ? && residence = ?";
+				my $stmt = $dbh->prepare($sql) ||
+					&fatalError("Unable to prepare $sql: $DBI::errstr");
+				$stmt->execute($in->{'state'}, $in->{'year'}, $in->{'family_structure'}, $in->{'child_number'}, $in->{'privateplan_type'}, 1) ||
+					&fatalError("Unable to execute $sql: $DBI::errstr");
+				($parent_cost, $family_cost) = $stmt->fetchrow();
+			}
 			for (my $i=1; $i<=$in->{'family_structure'}; $i++) {
 				if ($in->{'parent'.$i.'_age'} >= 18) { #If parent2 exists in the home...
 					${'hlth_cov_parent'.$i} = 'employer';
@@ -549,12 +555,17 @@ sub hlth
 		if ($adult_medicaid_count == $in->{'family_structure'}) {
 			($parent_cost_employer, $family_cost_employer) = 0;
 		} else {
-			my $sql = "SELECT parent_cost, family_cost FROM FRS_Health WHERE state = ? && year = ? && family_structure = ? && child_number = ? && plan_type = ? && residence = ?"; 
-			my $stmt = $dbh->prepare($sql) ||
-				&fatalError("Unable to prepare $sql: $DBI::errstr");
-			$stmt->execute($in->{'state'}, $in->{'year'}, $in->{'family_structure'} - $adult_medicaid_count, $in->{'child_number'} - $child_medicaid_count, $in->{'privateplan_type'}, 1) || 
-				&fatalError("Unable to execute $sql: $DBI::errstr");
-			($parent_cost_employer, $family_cost_employer) = $stmt->fetchrow();
+			$parent_cost_employer = &csvlookup($in->{'dir'}.'\FRS_health.csv', 'parent_cost', 'family_structure', $in->{'family_structure'} - $adult_medicaid_count, 'child_number', $in->{'child_number'} - $child_medicaid_count, 'plan_type', $in->{'privateplan_type'}, 'residence', 1);			
+			$family_cost_employer = &csvlookup($in->{'dir'}.'\FRS_health.csv', 'family_cost', 'family_structure', $in->{'family_structure'} - $adult_medicaid_count, 'child_number', $in->{'child_number'} - $child_medicaid_count, 'plan_type', $in->{'privateplan_type'}, 'residence', 1);
+
+			if (1 == 0) { #EquivalentSQL
+				my $sql = "SELECT parent_cost, family_cost FROM FRS_Health WHERE state = ? && year = ? && family_structure = ? && child_number = ? && plan_type = ? && residence = ?"; 
+				my $stmt = $dbh->prepare($sql) ||
+					&fatalError("Unable to prepare $sql: $DBI::errstr");
+				$stmt->execute($in->{'state'}, $in->{'year'}, $in->{'family_structure'} - $adult_medicaid_count, $in->{'child_number'} - $child_medicaid_count, $in->{'privateplan_type'}, 1) || 
+					&fatalError("Unable to execute $sql: $DBI::errstr");
+				($parent_cost_employer, $family_cost_employer) = $stmt->fetchrow();
+			}
 		
 			if ($in->{'privateplan_type'} eq 'smallgroup') { #NJ has a small group health insurance program that works similarly to the plans on the individual marketplace, with a few key adjustments, including a different age curve and setting a maximum number of children counted in determining the rates of a small group plan at 3 children. It is available to employers seeking to use small group / small employer health plans.
 			#LOOK AT ME: When rearranging this to separate out health care coverage better, adjust this small group calculation (if we are still planning on including this option) so that th parent_cost_employer and family_cost_employer does not include people on Medicaid 

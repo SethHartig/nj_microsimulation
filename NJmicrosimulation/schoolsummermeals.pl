@@ -141,38 +141,46 @@ sub schoolsummermeals
 	
 	#We can also run the income test for free lunch eligibility at this point, since that will be true across all children.  Identical to SSI income determinations, but SSI assistance is included. Reportable Income (https://www.ssa.gov/OP_Home/cfr20/416/416-app-k.htm) includes earnings, SSI, cash assistance, child support, and any other money available to pay for children’s meals. SNAP value is not counted. 
 
-	#Retrieving schooldays and summerdays, 
-	my $sql = "SELECT DISTINCT schooldays FROM FRS_Locations WHERE state = ? AND year = ? AND id = ?";
-	my $stmt = $dbh->prepare($sql) ||
-		&fatalError("Unable to prepare $sql: $DBI::errstr");
-	my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}) ||
-		&fatalError("Unable to execute $sql: $DBI::errstr");
-	$schooldays = $stmt->fetchrow();
-
-	my $sql = "SELECT DISTINCT summerdays FROM FRS_Locations WHERE state = ? AND year = ? AND id = ?";
-	my $stmt = $dbh->prepare($sql) ||
-		&fatalError("Unable to prepare $sql: $DBI::errstr");
-	my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}) ||
-		&fatalError("Unable to execute $sql: $DBI::errstr");
-	$summerdays = $stmt->fetchrow();
+	#Retrieving schooldays and summerdays,
 	
-	my $sql = "SELECT DISTINCT cep_particpation FROM FRS_Locations WHERE state = ? AND year = ? AND id = ?"; #Note there is a typo in the SQL file for this column - "cep_particpation" instead of "cep_participation". Typo is corrected for sanity below but it should also eventually reflect the correct spelling in the MySQL database.
-	my $stmt = $dbh->prepare($sql) ||
-		&fatalError("Unable to prepare $sql: $DBI::errstr");
-	my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}) ||
-		&fatalError("Unable to execute $sql: $DBI::errstr");
-	$cep_participation = $stmt->fetchrow();
+	foreach my $datum (qw(schooldays summerdays cep_participation summerweeks)) {	
+		${$datum} = &csvlookup($in->{'dir'}.'\FRS_Locations.csv', $datum, 'id', $in->{'residence'});
+	}
 
-	#add policy modeling option to allow children to receive meals on weekends/school holidays
-	if ($in->{'weekend_meals_alt'} == 1) {
-		my $sql = "SELECT DISTINCT summerweeks FROM FRS_Locations WHERE state = ? && year = ? && id = ?";
+	if (1 == 0) { #EquivalentSQL
+		my $sql = "SELECT DISTINCT schooldays FROM FRS_Locations WHERE state = ? AND year = ? AND id = ?";
 		my $stmt = $dbh->prepare($sql) ||
 			&fatalError("Unable to prepare $sql: $DBI::errstr");
-		$stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}) ||
+		my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}) ||
 			&fatalError("Unable to execute $sql: $DBI::errstr");
-		$summerweeks = $stmt->fetchrow();
+		$schooldays = $stmt->fetchrow();
 
+		my $sql = "SELECT DISTINCT summerdays FROM FRS_Locations WHERE state = ? AND year = ? AND id = ?";
+		my $stmt = $dbh->prepare($sql) ||
+			&fatalError("Unable to prepare $sql: $DBI::errstr");
+		my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}) ||
+			&fatalError("Unable to execute $sql: $DBI::errstr");
+		$summerdays = $stmt->fetchrow();
 		
+		my $sql = "SELECT DISTINCT cep_particpation FROM FRS_Locations WHERE state = ? AND year = ? AND id = ?"; #Note there is a typo in the SQL file for this column - "cep_particpation" instead of "cep_participation". Typo is corrected for sanity below but it should also eventually reflect the correct spelling in the MySQL database.
+		my $stmt = $dbh->prepare($sql) ||
+			&fatalError("Unable to prepare $sql: $DBI::errstr");
+		my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}) ||
+			&fatalError("Unable to execute $sql: $DBI::errstr");
+		$cep_participation = $stmt->fetchrow();
+	}
+	
+	#add policy modeling option to allow children to receive meals on weekends/school holidays
+	if ($in->{'weekend_meals_alt'} == 1) {
+		if (1 == 0) { #EquivalentSQL. This has been added to the csvlookup above.
+			my $sql = "SELECT DISTINCT summerweeks FROM FRS_Locations WHERE state = ? && year = ? && id = ?";
+			my $stmt = $dbh->prepare($sql) ||
+				&fatalError("Unable to prepare $sql: $DBI::errstr");
+			$stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}) ||
+				&fatalError("Unable to execute $sql: $DBI::errstr");
+			$summerweeks = $stmt->fetchrow();
+		}
+			
 		$schooldays = round((52 - $summerweeks) * 7); #While we could add 2 more days for weekends based on the number of schooldays in the SQL table, that formula wouldn't incorporate school holidays. This formula backs into the provision of meals during holidays and weekends during the school year by finding the number of weeks during the school year and then multiplying that by the number of days in a week.
 	}		
 	#We now check for whether we need to "fix" the CEP input variable when being used in the testing site, which does not check for CEP availability in a county. The UI does check for this. So when using the UI, cep_takeup will always be equal to the cep input variable. But it's possible using the testing interface that that cep input variable will be 1 in a county that 
@@ -214,18 +222,32 @@ sub schoolsummermeals
 
 		# Use food cost table to find value for child#foodcost_m based on child age:
 
+		#print "child1_age = ". $in->{'child1_age'}. "\n";
+		#print "child2_age = ". $in->{'child2_age'}. "\n";
+		#$child1_foodcost_m = csvlookup ($in->{'dir'}.'\FRS_Food.csv', 'cost', 'age_min', 12);
+		#$child2_foodcost_m = csvlookup ($in->{'dir'}.'\FRS_Food.csv', 'cost', 'age_min', 12);
+		#print '1. child1_foodcost_m = '.$child1_foodcost_m. "\n";
+		#print '1. child2_foodcost_m = '.$child2_foodcost_m. "\n";
+		
+
 		for (my $i = 1; $i <= 5; $i++) {
 
 			# Use food cost table to find value for child#foodcost_m based on child age:
-			my $sql = "SELECT cost FROM FRS_Food WHERE year = ? && age_min <= ? && age_max >= ?";
+			
 			if ($in->{'child'.$i.'_age'} != -1) { 
-				my $stmt = $dbh->prepare($sql) || &fatalError("Unable to prepare $sql: $DBI::errstr");
-				$stmt->execute($in->{"year"}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"});
-				${"child".$i."_foodcost_m"} = $stmt->fetchrow();
+				
+				${"child".$i."_foodcost_m"} = csvlookup_ops ($in->{'dir'}.'\FRS_Food.csv', 'cost', 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'});
+				if (1 == 0) { #EquivalentSQL
+					my $sql = "SELECT cost FROM FRS_Food WHERE year = ? && age_min <= ? && age_max >= ?";
+					my $stmt = $dbh->prepare($sql) || &fatalError("Unable to prepare $sql: $DBI::errstr");
+					$stmt->execute($in->{"year"}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"});
+					${"child".$i."_foodcost_m"} = $stmt->fetchrow();
+				}
 			} else {
 				${"child".$i."_foodcost_m"} = 0; #SH note 11/1/19: There seemed to be an arbitarily high number here from 2017 (it equaled 3410), but as far as I can tell that error had no effect on the output of this code, since food reductions calculated here are only for children who are of certain ages, and this calculation is for the food costs of nonexistant children (meaning children whose ages are -1).
 			}
 
+			
 			$permealcost = (${'child'.$i.'_foodcost_m'}/4.33)/(7*3);
 			${'debug'.$i} = $permealcost;
 
