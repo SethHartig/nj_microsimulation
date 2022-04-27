@@ -93,13 +93,17 @@ sub ccdf
 	our $cc_expenses_child5 = 0;
 	our $ccdf_child_count = 0;
 
+	$summerweeks = &csvlookup($in->{'dir'}.'\FRS_Locations.csv', 'summerweeks', 'id', $in->{'residence'});
+
+	if (1 == 0) { #EquivalentSQL
 	my $sql = "SELECT DISTINCT summerweeks FROM FRS_Locations WHERE state = ? && year = ? && id = ?";
 	my $stmt = $dbh->prepare($sql) || 
 		&fatalError("Unable to prepare $sql: $DBI::errstr");
 		$stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}) ||
 		&fatalError("Unable to execute $sql: $DBI::errstr");
 		$summerweeks = $stmt->fetchrow();
-
+	}
+	
 	# STEP 1: Test if there is any child care need.
     if ($out->{'unsub_all_children'} == 0 || $in->{'ccdf'} == 0) {	
         $cc_subsidized_flag = 0;

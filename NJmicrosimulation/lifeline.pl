@@ -86,7 +86,7 @@ sub lifeline
 		}		
 	} 
   # outputs
-    foreach my $name (qw(lifeline lifeline_subsidy lifeline_inc_limit lifeline_recd ssi_recd lifeline_cost covid_broadband_benefit ebb_recd)) {
+    foreach my $name (qw(lifeline lifeline_subsidy lifeline_inc_limit lifeline_recd lifeline_cost ebb_recd)) {
 		$self{'out'}->{$name} = ${$name}; 
     }
 

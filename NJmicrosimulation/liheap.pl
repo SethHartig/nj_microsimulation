@@ -407,13 +407,18 @@ sub liheap
 		
 		#Recalculate fpl according to unit size, rather than family_size. 
 		#First, determine the poverty level based on teh LIHEAP unit size.
-		$sql = "SELECT fpl from FRS_General WHERE state = ? AND year = ? AND size = ?";
-		my $stmt = $dbh->prepare($sql) ||
-			&fatalError("Unable to prepare $sql: $DBI::errstr");
-		my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $unit_size) ||
-			&fatalError("Unable to execute $sql: $DBI::errstr");
-		$unit_fpl = $stmt->fetchrow();
-		$stmt->finish();
+
+		$unit_fpl = &csvlookup($in->{'dir'}.'\FRS_General.csv', 'fpl', 'size', $unit_size);
+
+		if (1 == 0) { #EquivalentSQL
+			$sql = "SELECT fpl from FRS_General WHERE state = ? AND year = ? AND size = ?";
+			my $stmt = $dbh->prepare($sql) ||
+				&fatalError("Unable to prepare $sql: $DBI::errstr");
+			my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $unit_size) ||
+				&fatalError("Unable to execute $sql: $DBI::errstr");
+			$unit_fpl = $stmt->fetchrow();
+			$stmt->finish();
+		}
 		
 		#Use the poverty level of teh family coupled with other eligibility criteria to determine program benefits.
 		

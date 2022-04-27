@@ -778,7 +778,7 @@ sub child_care
 	our $childcare_threshold_age_child4 = 0;
 	our $childcare_threshold_age_child5 = 0;
 	
-	
+	use POSIX;
 	# 1. DETERMINE NEED FOR CARE AND CHECK CCDF FLAG
 	#
 	if ($out->{'parent_workhours_w'} == 0 || $in->{'children_under13'} + $in->{'disabled_older_children'} == 0) { 
@@ -923,14 +923,18 @@ sub child_care
 
 		# From the school schedule at 
 		# We need to use how many weeks of summer there is.
-		my $sql = "SELECT DISTINCT summerweeks FROM FRS_Locations WHERE state = ? && year = ? && id = ?";
-		my $stmt = $dbh->prepare($sql) ||
-			&fatalError("Unable to prepare $sql: $DBI::errstr");
-		$stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}) ||
-			&fatalError("Unable to execute $sql: $DBI::errstr");
-		$summerweeks = $stmt->fetchrow();
-		# School days last from 8:45am to 3:15pm for children of all grades, or 6.5 hours. See the indication at https://dcps.dc.gov/ece that pre-school children have the same calendar as traditionally-aged schoolchildren. 
-							
+		$summerweeks = &csvlookup($in->{'dir'}.'\FRS_Locations.csv', 'summerweeks', 'id', $in->{'residence'});
+
+		if (1 == 0) { #EquivalentSQL
+			my $sql = "SELECT DISTINCT summerweeks FROM FRS_Locations WHERE state = ? && year = ? && id = ?";
+			my $stmt = $dbh->prepare($sql) ||
+				&fatalError("Unable to prepare $sql: $DBI::errstr");
+			$stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}) ||
+				&fatalError("Unable to execute $sql: $DBI::errstr");
+			$summerweeks = $stmt->fetchrow();
+			# School days last from 8:45am to 3:15pm for children of all grades, or 6.5 hours. See the indication at https://dcps.dc.gov/ece that pre-school children have the same calendar as traditionally-aged schoolchildren. 
+		}
+		
 		#For children 1-5 
 		for(my $i=1; $i<=5; $i++) {
 			
@@ -1132,9 +1136,12 @@ sub child_care
 
 		#get SQL queries ready			
 			
-		my $sql = "SELECT DISTINCT FRS_SPR.spr FROM FRS_CareOptions LEFT JOIN FRS_SPR USING (state, year, ccdf_type) LEFT JOIN FRS_Locations USING (state, year, ccdf_region) WHERE FRS_SPR.state = ? && FRS_SPR.year = ? && FRS_SPR.ccdf_time = ? && FRS_SPR.age_min <= ? && FRS_SPR.age_max >= ? && FRS_Locations.id = ? && FRS_CareOptions.text = ?";
- 		my $stmt = $dbh->prepare($sql) ||
-			&fatalError("Unable to prepare $sql: $DBI::errstr");  
+		if (1 == 0) { #EquivalentSQL
+			my $sql = "SELECT DISTINCT FRS_SPR.spr FROM FRS_CareOptions LEFT JOIN FRS_SPR USING (state, year, ccdf_type) LEFT JOIN FRS_Locations USING (state, year, ccdf_region) WHERE FRS_SPR.state = ? && FRS_SPR.year = ? && FRS_SPR.ccdf_time = ? && FRS_SPR.age_min <= ? && FRS_SPR.age_max >= ? && FRS_Locations.id = ? && FRS_CareOptions.text = ?";
+			my $stmt = $dbh->prepare($sql) ||
+				&fatalError("Unable to prepare $sql: $DBI::errstr");  
+		}
+		
 		# for each child from 1-5 :
 		for(my $i=1; $i<=5; $i++) {
 			if ($in->{'child'.$i.'_age'} != -1 && $in->{'child'.$i.'_age'}< ${'childcare_threshold_age_child'.$i}) {
@@ -1154,14 +1161,25 @@ sub child_care
 					# Look up price of child care by type of subsidized care:
 
 					# Look up child care cost by $ccdf_time = $day#care_child#, by child#_age (>= age_min and <=age_max) and care type (ccdf_type = child#_withbenefit_setting), and call that variable $day#cost_child#.
-					$stmt->execute($in->{'state'}, $in->{'year'}, ${"day".$j."care_child".$i}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"}, $in->{'residence'}, $in->{"child".$i."_withbenefit_setting"}) ||&fatalError("Unable to execute $sql: $DBI::errstr");
-					${'day'.$j.'cost_child'.$i} = $stmt->fetchrow() / 5; 
+					
+					if (${"day".$j."care_child".$i} ne 'none') {
+						${'day'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"day".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
+					} 
+					
+					if (1 == 0) { #EquivalentSQL
+						$stmt->execute($in->{'state'}, $in->{'year'}, ${"day".$j."care_child".$i}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"}, $in->{'residence'}, $in->{"child".$i."_withbenefit_setting"}) ||&fatalError("Unable to execute $sql: $DBI::errstr");
+						${'day'.$j.'cost_child'.$i} = $stmt->fetchrow() / 5; 
+					}
 					#IMPORTANT NOTE: Note that in NJ, we are dividing the weekly rates in the FRS_SPR table by 5. The justification for this derivation is that the SPR daily rates are all one-fifth of the weekly rates, and there is only weekly or daily (not monthly) in the market rate study. As we are deriving missing values for other market rates than those included in the study based on the ratios between subsidized care and market rates when both are available for certain types of care, we are similarly assuming here that the market rates are proportionately relative to the subsidized rates for the full set of daily rates, which are all misssing from the market rate study.
 
 					# Look up child care cost by $ccdf_time = $summerday#care_child#, by child#_age (>= age_min and <=age_max) and care type (ccdf_type = child#_withbenefit_setting), and call that variable $summerday#cost_child#.
-					$stmt->execute($in->{'state'}, $in->{'year'}, ${"summerday".$j."care_child".$i}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"}, $in->{'residence'}, $in->{"child".$i."_withbenefit_setting"}) ||&fatalError("Unable to execute $sql: $DBI::errstr");
-					${'summerday'.$j.'cost_child'.$i} = $stmt->fetchrow() / 5;
-					
+					if (${"summerday".$j."care_child".$i} ne 'none') {
+						${'summerday'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"summerday".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
+					} 
+					if (1 == 0) { #EquivalentSQL
+						$stmt->execute($in->{'state'}, $in->{'year'}, ${"summerday".$j."care_child".$i}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"}, $in->{'residence'}, $in->{"child".$i."_withbenefit_setting"}) ||&fatalError("Unable to execute $sql: $DBI::errstr");
+						${'summerday'.$j.'cost_child'.$i} = $stmt->fetchrow() / 5;
+					}
 				}			
 
 				${'spr_child'.$i} = (52 - $summerweeks - $weeks_off)*(${'day1cost_child'.$i} + ${'day2cost_child'.$i} +${'day3cost_child'.$i} + ${'day4cost_child'.$i} + ${'day5cost_child'.$i} +${'day6cost_child'.$i} + ${'day7cost_child'.$i} + ${'nontraditional_days_child'.$i}*$spr_nontrad_bonus) + $summerweeks * (${'summerday1cost_child'.$i} + ${'summerday2cost_child'.$i} + ${'summerday3cost_child'.$i} + ${'summerday4cost_child'.$i} + ${'summerday5cost_child'.$i} + ${'summerday6cost_child'.$i} + ${'summerday7cost_child'.$i} + ${'nontraditional_summerdays_child'.$i}*$spr_nontrad_bonus); #This is the same formula as above, but just want to make sure this is clear that this is for a non-infant whose family is not taking off to care for the infant. #child care costs are the same throughout the year for infants.  
@@ -1233,13 +1251,24 @@ sub child_care
 							}
 						}
 						# Look up child care cost by $ccdf_time = $day#care_child#, by child#_age (>= age_min and <=age_max) and care type (if (CCDF = 1) {ccdf_type = child#_continue_setting} else {ccdf_type = child#_nobenefit_setting}), and call that variable $day#cost_child#.
-						$stmt->execute($in->{'state'}, $in->{'year'}, ${"day".$j."care_child".$i}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"}, $in->{'residence'}, ${'unsub_type'.$i}) ||&fatalError("Unable to execute $sql: $DBI::errstr");
-						${'day'.$j.'cost_child'.$i} = $stmt->fetchrow() / 5;
-
-						# Look up child care cost by $ccdf_time = $summerday#care_child#, child#_age (>= age_min and <=age_max) and care type (if (CCDF = 1) {ccdf_type = child#_continue_setting} else {ccdf_type = child#_nobenefit_setting}),and call that variable $summerday#cost_child#.
-						$stmt->execute($in->{'state'}, $in->{'year'}, ${"summerday".$j."care_child".$i}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"}, $in->{'residence'}, ${'unsub_type'.$i}) ||&fatalError("Unable to execute $sql: $DBI::errstr");
-						${'summerday'.$j.'cost_child'.$i} = $stmt->fetchrow() / 5;
 						
+						if (${"day".$j."care_child".$i} ne 'none') {
+							${'day'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"day".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_type', 'eq', ${'unsub_type'.$i});
+						} 
+						
+						if (${"summerday".$j."care_child".$i} ne 'none') {
+							${'summerday'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"summerday".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_type', 'eq', ${'unsub_type'.$i});
+						} 
+						
+						if (1 == 0) { #EquivalentSQL
+						
+							$stmt->execute($in->{'state'}, $in->{'year'}, ${"day".$j."care_child".$i}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"}, $in->{'residence'}, ${'unsub_type'.$i}) ||&fatalError("Unable to execute $sql: $DBI::errstr");
+							${'day'.$j.'cost_child'.$i} = $stmt->fetchrow() / 5;
+
+							# Look up child care cost by $ccdf_time = $summerday#care_child#, child#_age (>= age_min and <=age_max) and care type (if (CCDF = 1) {ccdf_type = child#_continue_setting} else {ccdf_type = child#_nobenefit_setting}),and call that variable $summerday#cost_child#.
+							$stmt->execute($in->{'state'}, $in->{'year'}, ${"summerday".$j."care_child".$i}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"}, $in->{'residence'}, ${'unsub_type'.$i}) ||&fatalError("Unable to execute $sql: $DBI::errstr");
+							${'summerday'.$j.'cost_child'.$i} = $stmt->fetchrow() / 5;
+						}
 					}
 					${'unsub_child' . $i} = (52 - $summerweeks - $weeks_off)*(${'day1cost_child'. $i} + ${'day2cost_child'. $i} + ${'day3cost_child'. $i} + ${'day4cost_child' . $i} + ${'day5cost_child' . $i} + ${'day6cost_child' . $i} + ${'day7cost_child' . $i}) + $summerweeks * (${'summerday1cost_child' . $i} + ${'summerday2cost_child' . $i} + ${'summerday3cost_child' . $i} + ${'summerday4cost_child' . $i} + ${'summerday5cost_child' . $i} + ${'summerday6cost_child' . $i} + ${'summerday7cost_child' . $i}); #This assumes, as below, that parents have their child in non-summer months. This does not affect the calculations here but does affect it in ccdf, at least for NJ. We discussed this but I'm inclined to leave this assumption intact, in that the baby is born in January. Otherwise the family has a different family size over the course of a year, which messes up nearly all the other benefit programs in our model.
 					
@@ -1247,17 +1276,28 @@ sub child_care
 
 					#To accurately account for overage costs, specifically for families who choose to switch child care provider types after losing CCDF, we need to also calculate the total costs of what unsubsidized rates would be for those child care providers when the family is on CCDF subsidies. 
 					for(my $j=1; $j<=7; $j++) {
-						$stmt->execute($in->{'state'}, $in->{'year'}, ${"day".$j."care_child".$i}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"}, $in->{'residence'}, $in->{"child".$i."_withbenefit_setting"}) ||&fatalError("Unable to execute $sql: $DBI::errstr");
-						${'day'.$j.'cost_child'.$i} = $stmt->fetchrow() / 5;
 
-						$stmt->execute($in->{'state'}, $in->{'year'}, ${"summerday".$j."care_child".$i}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"}, $in->{'residence'}, $in->{"child".$i."_withbenefit_setting"}) ||&fatalError("Unable to execute $sql: $DBI::errstr");
-						${'summerday'.$j.'cost_child'.$i} = $stmt->fetchrow() / 5;
+						if (${"day".$j."care_child".$i} ne 'none') {
+							${'day'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"day".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
+						} 
+					
+						if (${"summerday".$j."care_child".$i} ne 'none') {
+							${'summerday'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"summerday".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
+						} 
+
+						if (1 == 0) { #EquivalentSQL
+						
+							$stmt->execute($in->{'state'}, $in->{'year'}, ${"day".$j."care_child".$i}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"}, $in->{'residence'}, $in->{"child".$i."_withbenefit_setting"}) ||&fatalError("Unable to execute $sql: $DBI::errstr");
+							${'day'.$j.'cost_child'.$i} = $stmt->fetchrow() / 5;
+
+							$stmt->execute($in->{'state'}, $in->{'year'}, ${"summerday".$j."care_child".$i}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"}, $in->{'residence'}, $in->{"child".$i."_withbenefit_setting"}) ||&fatalError("Unable to execute $sql: $DBI::errstr");
+							${'summerday'.$j.'cost_child'.$i} = $stmt->fetchrow() / 5;
+						}
 					}
 					${'fullcost_child' . $i} = (52 - $summerweeks - $weeks_off)*(${'day1cost_child'. $i}  + ${'day2cost_child'. $i}  +${'day3cost_child'. $i}  +${'day4cost_child' . $i}  +${'day5cost_child' . $i}  +${'day6cost_child' . $i}  +${'day7cost_child' . $i} ) + $summerweeks * (${'summerday1cost_child' . $i} + ${'summerday2cost_child' . $i} +${'summerday3cost_child' . $i} + ${'summerday4cost_child' . $i} + ${'summerday5cost_child' . $i} +${'summerday6cost_child' . $i} + ${'summerday7cost_child' . $i} ); 
 				}
 			}
 		}
- 
 		$spr_all_children = $spr_child1 + $spr_child2 + $spr_child3 + $spr_child4 + $spr_child5; 
 		$unsub_all_children = $unsub_child1 + $unsub_child2 + $unsub_child3 + $unsub_child4 + $unsub_child5;
 		$fullcost_all_children = $fullcost_child1 + $fullcost_child2 + $fullcost_child3 + $fullcost_child4 + $fullcost_child5;

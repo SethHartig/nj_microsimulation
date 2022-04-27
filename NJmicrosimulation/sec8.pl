@@ -128,14 +128,20 @@ sub sec8
 		# Determine eligibility
 
         # Use "Locations" tab in the base table to determine fair market rent, used for the section 8 payment standard, based on year, state, residence, and number_children, labeling the associated value as sec8_payment_standard. Because we are shifting from  model in previous years that limited locations to a new approach of modeling many more residences in a single state, we have adjusted this SQL code to include lookups for 1-br, 2-br, 3-br, and 4-br FMRs based on family size, rather than building those different values in multiple rows for the same locality in SQL There may be a more elegant way to do this SQL call but this shoudl get the job done.
-		my $sql = "SELECT rent FROM FRS_Locations WHERE state = ? AND year = ? AND id = ? AND number_children = ?";
-        my $stmt = $dbh->prepare($sql) ||
-            &fatalError("Unable to prepare $sql: $DBI::errstr");
-        my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}, $sec8_eligible_dependents) ||
-            &fatalError("Unable to execute $sql: $DBI::errstr");
 
-        $sec8_payment_standard = $stmt->fetchrow();
+		$sec8_payment_standard = &csvlookup($in->{'dir'}.'\FRS_Locations.csv', 'rent', 'name', $in->{'residence_nj'}, 'number_children', $in->{'child_number'});
 
+		if (1 == 0) { #EquivalentSQL
+
+			my $sql = "SELECT rent FROM FRS_Locations WHERE state = ? AND year = ? AND id = ? AND number_children = ?";
+			my $stmt = $dbh->prepare($sql) ||
+				&fatalError("Unable to prepare $sql: $DBI::errstr");
+			my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}, $sec8_eligible_dependents) ||
+				&fatalError("Unable to execute $sql: $DBI::errstr");
+
+			$sec8_payment_standard = $stmt->fetchrow();
+		}
+		
 		# 2017 note: In DC, the payment standard is up to 175% of the FMR for all size units (see 14 DCMR 8300).The below if-block therefore adjusts the payment standard previously attained from the area rent listed in the SQL tables. The consequence of this change will be that when users manually enter a family's rent as higher than the FMR that family will still be eligible for section 8 up to 175% of FMR. 
 		# This is set up specifically for DC, for new sections please set up an if statement 
 		if ($in->{'state'} eq 'DC') { 
@@ -287,7 +293,7 @@ sub sec8
 
 # END:
 	# outputs
-    foreach my $name (qw(rent_paid rent_paid_m housing_recd housing_subsidized rent_difference last_received_sec8 sec8_eligible_dependents)) { #  
+    foreach my $name (qw(rent_paid rent_paid_m housing_recd housing_subsidized rent_difference sec8_eligible_dependents)) { #  
  		$self{'out'}->{$name} = ${$name}; 
     }
 
