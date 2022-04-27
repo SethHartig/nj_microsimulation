@@ -56,7 +56,7 @@ print "mode=".$mode."\n";
 # CHANGE THIS PATH TO WHERE THE PERL FILES ARE STORED:
 use lib 'C:\Users\Bank Street\Dropbox\FRS\Perl\NJmicrosimulation';
 # CHANGE THIS PATH TO WHERE THE SOURCE FILE (THE FILE WITH INPUTS) IS LOCATED:
-open(TEST1, '<', 'C:\Seth\Bankstreet extra\frs_inputs_4.csv') or die "Couldn't open csv file $!";
+open(TEST1, '<', 'C:\Seth\Bankstreet extra\frs_inputs_4a.csv') or die "Couldn't open csv file $!";
 # CHANGE THIS PATH TO WHERE THE OUTPUT FILE IS LOCATED
 open(TEST2, '>', 'C:\Seth\Bankstreet extra\perl_output.csv');
 # ALSO CHANGE THIS PATH TO WHERE THE PERL FILES ARE STORED:
