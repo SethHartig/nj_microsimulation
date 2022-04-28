@@ -56,7 +56,7 @@ print "mode=".$mode."\n";
 # CHANGE THIS PATH TO WHERE THE PERL FILES ARE STORED:
 use lib 'C:\Users\Bank Street\Dropbox\FRS\Perl\NJmicrosimulation';
 # CHANGE THIS PATH TO WHERE THE SOURCE FILE (THE FILE WITH INPUTS) IS LOCATED:
-open(TEST1, '<', 'C:\Seth\Bankstreet extra\frs_inputs_4.csv') or die "Couldn't open csv file $!";
+open(TEST1, '<', 'C:\Seth\Bankstreet extra\frs_inputs_4a.csv') or die "Couldn't open csv file $!";
 # CHANGE THIS PATH TO WHERE THE OUTPUT FILE IS LOCATED
 open(TEST2, '>', 'C:\Seth\Bankstreet extra\perl_output.csv');
 # ALSO CHANGE THIS PATH TO WHERE THE PERL FILES ARE STORED:
@@ -75,8 +75,8 @@ $self{'in'}->{'dir'} = $dir;
 
 
 #Assign how many times (iterations) you want the perl code to increase the earnings of each household, and the amount of each earnings increase (interval):
-our $iterations = 80; # Can eventually make this into an input that can be set by ESI in the input CSV file.
-our $interval = 1000; #Can eventually make this into an input that can be set by ESI in the input CSV file.
+our $iterations = 2; # Can eventually make this into an input that can be set by ESI in the input CSV file.
+our $interval = 5000; #Can eventually make this into an input that can be set by ESI in the input CSV file.
 
 
 my @inputvars = qw(SERIALNO residence_nj residence rent_cost); #These are the variables from teh $in hash (set) that will appear for each SERIALNO in the final output sheet. Add additional input variables as needed to determing successful execution of modules or to debug them.
@@ -219,7 +219,9 @@ while (my $line = <TEST1>) {
 			#RUNNING THE PERL MODULES OF EXPENSES AND BENEFITS:
 			
 			#We now set up the order of functions to be executed as defined in the FRS's defaults function, replicated below. The NJ defaults.pl file and upcoming associated technical documentaiton describe why this spsecific order, and adjustemnts to that order based on disabiltiy or child support are necessary for our calcualtions.
-			my @order = qw(interest parent_earnings fostercare fli_tdi ssdi unemployment child_care ssp ssi fed_hlth_insurance hlth child_support tanf work child_care  ccdf hlth sec8 fsp_assets liheap fsp work afterschool schoolsummermeals wic fedtax eitc payroll ctc statetax food lifeline salestax other);
+			my @order = qw(interest parent_earnings fostercare fli_tdi ssdi unemployment child_care ssp  ssi fed_hlth_insurance hlth child_support tanf  work child_care  ccdf hlth sec8 fsp_assets liheap fsp work afterschool schoolsummermeals wic fedtax eitc payroll ctc statetax food lifeline salestax other);
+			#);
+			#if (1 == 0) { #activate for debugging in single mode.
 			if ($self{'in'}->{'cs_flag'} == 1 || $self{'in'}->{'disability_child1'} + $self{'in'}->{'disability_child2'} + $self{'in'}->{'disability_child3'} + $self{'in'}->{'disability_child4'} + $self{'in'}->{'disability_child5'} > 0) {
 				if ($self{'in'}->{'disability_child1'} + $self{'in'}->{'disability_child2'} + $self{'in'}->{'disability_child3'} + $self{'in'}->{'disability_child4'} + $self{'in'}->{'disability_child5'} > 0)	{
 					push @order, qw(ssi fed_hlth_insurance hlth);
@@ -230,14 +232,14 @@ while (my $line = <TEST1>) {
 				}
 				push @order, qw(tanf work child_care ccdf sec8 fsp_assets liheap fsp work afterschool schoolsummermeals wic fedtax eitc  payroll ctc statetax food lifeline salestax other);
 			}
-			
 			#Now we execute ach of the above functions in the order assigned.
+			#} #activate for debugging errors in single mode.
 			foreach my $function (@order) {
 				require $function.'.pl';
 				#Note: if this doesn't work, try using &$function instead of $function. Not sure how perl will get rid of the quotes in since the functions are referenced as a quoted word (sting) above. Probably fine, though -- erase this note if it is.
 				&$function(%self);
 			}
-			
+			#if (1 == 0) { #Activate for debugging perl errors on single mode.
 			#The old way (from the NH 2021 analysis) this was done is below. This looks clunky, but it may prove helpful for debugging if there are errors that require identifying which perl function is generating the error. Commenting out for now, though:
 			
 			#require "parent_earnings_nh.pl";
@@ -335,6 +337,7 @@ while (my $line = <TEST1>) {
 					die "\n";
 				}
 			}
+			#} #Activate for debugging perl errors on single mode.
 		}
 	}
 }
@@ -443,6 +446,7 @@ sub csvlookup {
 	}
 }
 
+#IMPORTANT NOTE: This code seems to have issues with lookups of 0 values. May need to change these to something like "-0.1" for things like checking child ages.
 sub csvlookup_ops {
 	#E.g. csvlookup_ops ($in->{'dir'}.'\FRS_Food.csv', 'cost', 'age_min', '<=', $in->{'child1_age'}, 'age_max', '>=', $in->{'child1_age'}). Should be similar to the above but with conditions to account for 'eq', '<', '>', '<=', and '>='. 
 
@@ -477,19 +481,19 @@ sub csvlookup_ops {
 							$table_return = 0;
 						}
 					} elsif ($_[3*$i] eq '<') {						 
-						if ($table->{$_[3*$i-1]} >= $_[3*$i + 1]) { 
+						if (sprintf("%.1f", $table->{$_[3*$i-1]}) >= sprintf("%.1f",$_[3*$i + 1])) { 
 							$table_return = 0;
 						}
 					} elsif ($_[3*$i] eq '<=') {						 
-						if ($table->{$_[3*$i-1]} > $_[3*$i + 1]) { 
+						if (sprintf("%.1f", $table->{$_[3*$i-1]}) > sprintf("%.1f",$_[3*$i + 1])) { 
 							$table_return = 0;
 						}
 					} elsif ($_[3*$i] eq '>') {						 
-						if ($table->{$_[3*$i-1]} <= $_[3*$i + 1]) { 
+						if (sprintf("%.1f", $table->{$_[3*$i-1]}) <= sprintf("%.1f",$_[3*$i + 1])) { 
 							$table_return = 0;
 						}
 					} elsif ($_[3*$i] eq '>=') {						 
-						if ($table->{$_[3*$i-1]} < $_[3*$i + 1]) { 
+						if (sprintf("%.1f", $table->{$_[3*$i-1]}) < sprintf("%.1f",$_[3*$i + 1])) { 
 							$table_return = 0;
 						}
 					}

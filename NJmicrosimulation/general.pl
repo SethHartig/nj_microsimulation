@@ -113,8 +113,8 @@ sub general {
 	
 	#print 'residence_nj ='.$in->{'residence_nj'}."\n"; 
 	#print 'table name ='.$table->{'name'}."\n"; 
+	print 'SERIALNO = '.$in->{'SERIALNO'}."\n";
 	print 'residence ='.$in->{'residence'}."\n"; 
-
 	#$sql = "SELECT id from FRS_Locations WHERE state = ? AND year = ? AND name = ?";
     #my $stmt = $dbh->prepare($sql) ||
     #    &fatalError("Unable to prepare $sql: $DBI::errstr");

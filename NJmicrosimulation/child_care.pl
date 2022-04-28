@@ -1135,12 +1135,45 @@ sub child_care
 		# Note for future consideration: It’s at this point that we should be able to tell pretty well exactly when children are receiving child care. When a child is in child care, the child care provider may or may not provide them with a meal, but based on research by SS it appears that these meals are usually billable to the parent, so a reduction in food costs does not seem in order.  From the market rate report, it seems that if child care facilities participate in the Child and Adult Food Program (CACFP), that facility is reimbursed for the meal, but apparently that program is designed to provide income to child care providers rather than families whose children are in care. 
 
 		#get SQL queries ready			
-			
+		
+		
 		if (1 == 0) { #EquivalentSQL
 			my $sql = "SELECT DISTINCT FRS_SPR.spr FROM FRS_CareOptions LEFT JOIN FRS_SPR USING (state, year, ccdf_type) LEFT JOIN FRS_Locations USING (state, year, ccdf_region) WHERE FRS_SPR.state = ? && FRS_SPR.year = ? && FRS_SPR.ccdf_time = ? && FRS_SPR.age_min <= ? && FRS_SPR.age_max >= ? && FRS_Locations.id = ? && FRS_CareOptions.text = ?";
 			my $stmt = $dbh->prepare($sql) ||
 				&fatalError("Unable to prepare $sql: $DBI::errstr");  
 		}
+
+		#Helpful for debugging this code:
+
+		#print 'day2care_child1 = '.$day2care_child1 ."\n";
+		#print 'child1_age = ' .$in->{'child1_age'} . "\n";
+		#print "child1_withbenefit_setting = ". $in->{"child1_withbenefit_setting"} . "\n";
+
+		#for(my $j=1; $j<=2; $j++) {
+		#	${'day'.$j.'cost_child1'} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', 'fulltime', 'age_min', '<=', 2, 'age_max', '>=', 2, 'ccdf_region', 'eq', 19, 'ccdf_type', 'eq', 'accredited_center');
+		#}
+		
+		
+		#	for(my $i=1; $i<=1; $i++) {
+		#		for(my $j=1; $j<=2; $j++) {
+		#			if ($in->{'child'.$i.'_age'} != -1 && $in->{'child'.$i.'_age'}< ${'childcare_threshold_age_child'.$i}) {
+		#				if (${"day".$j."care_child".$i} ne 'none') {
+		#					${'day'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"day".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', 19, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
+		#				}
+		#			}
+		#		}
+		#	}
+		
+		
+		#	for(my $i=1; $i<=5; $i++) {
+		#		for(my $j=1; $j<=7; $j++) {
+		#			if ($in->{'child'.$i.'_age'} != -1 && $in->{'child'.$i.'_age'}< ${'childcare_threshold_age_child'.$i}) {
+		#				if (${"summerday".$j."care_child".$i} ne 'none') {
+		#					${'summerday'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"summerday".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', 14, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
+		#				}
+		#			}
+		#		}
+		#	}
 		
 		# for each child from 1-5 :
 		for(my $i=1; $i<=5; $i++) {
