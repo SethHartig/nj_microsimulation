@@ -138,9 +138,6 @@ frs_df8 = frs_df7 %>%
 
 ```
 
-```{r}
-frs_df8 %>% head()
-```
 
 ```{r}
 write.csv(frs_df8, "./data/cleaned_data/frs_inputs_4.csv", row.names = F)

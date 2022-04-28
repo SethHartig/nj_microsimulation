@@ -16,88 +16,366 @@ require("bit64")
 census_api_key("e0ff7586a0faf3bf1819178c1392ba6fa3df7ad9")
 ```
 
-```{r}
+
+### Document Purpose
+
+* Document the steps of multiple imputation using SIPP data as (impute from survey), with ACS pUMS as (impute to survey)
+
+
+#### STEP 1: Read in data
+* FRS inputs
+* ACS household/individual level from New Jersey
+* SIPP selected data from New Jersey
+
+```{r read data}
 frs_individuals = read.csv("./data/cleaned_data/acs_individuals.csv")
 frs_df = read.csv("./data/cleaned_data/frs_inputs_3.csv")
+nj_19h = haven::read_sas("./data/unix_hnj/psam_h34.sas7bdat")
 ```
 
-```{r}
-# let the outcome Y be household income
-# let the covariates takeN from FRS to be 
-# 1. person reference/state 2. age 3. class of work 4. education level 5. marital status 6. relationship 7. race. 8. gender. 9. work hours 10. personal income 11. Nativity 
-
-acs_model = frs_individuals %>% 
-  select(SERIALNO, ST, AGEP, COW, SCHL, MSP, RELSHIPP, RAC1P, SEX, WKHP, PINCP, NATIVITY)
-```
-
-```{r}
-acs_model %>% head()
-```
-
-```{r}
-# The following code is an example of reading the pipe-delimited Survey of Income and Program Participation (SIPP) 
-# 	data into an R dataframe in preparation for analysis. Specifically, this code loads in both the primary data file 
-#   and the calendar-year replicate weights file (as opposed to the longitudinal replicate weights). These files are 
-#   separate downloads on the SIPP website.
-# SIPP data are in person-month format, meaning each record represents one month for a specific person.
-#   Unique persons are identified using SSUID+PNUM. Unique households are identified using SSUID+ERESIDENCEID. For 
-#   additional guidance on using SIPP data, please see the SIPP Users' Guide at <https://www.census.gov/programs-surveys/sipp/guidance/users-guide.html>
-# This code was written in R 4.1.0, and requires the "data.table", "dplyr", and "bit64" packages. 
-# Note the 'select' statement in the first use of fread(). Most machines do not have enough memory to read
-# 	the entire SIPP file into memory. Use a 'select' statement to read in only the columns you are interested in using. 
-#   If you still encounter an out-of-memory error, you must select less columns or less observations.
-# Run this code from the same directory as the extracted data.
-# This code was written by Adam Smith. Please contact census.sipp@census.gov if you have any questions.
-
-#Load the "data.table", "dplyr", and "bit64" libraries
-
-#Read in the Primary Data file. Choose only the variables you want to read in in order to save on memory.
-#This code assumes that your working directory is the same directory as the data.
-pu <- fread("./data/pu2020.csv", sep = "|", select = c(
-  
-  #Common case identification variables
-	'SSUID','PNUM','MONTHCODE','ERESIDENCEID','ERELRPE','SPANEL','SWAVE',
-	
-	#The base weight
-	'WPFINWGT',
-	
-	#Common demographics variables, including age at time of interview (TAGE)
-	#	and monthly age during the reference period (TAGE_EHC)
-	'ESEX','TAGE','ERACE','EORIGIN','EEDUC',
-	
-	#Example additional variables for analysis
-	'TPTOTINC'))
-
-#Make sure all the column names are upper-case
-names(pu) <- toupper(names(pu))
-
-#Preview the data
-head(pu, 20)
-```
-
-```{r}
+```{r read data from SIPP}
 # 1. SSUID/PNUM/MONTHCODE and TEHC_ST 2. TAGE 4. EEDUC 5. EMS_EHC 6. ERELRPE 7. ERACE 8. ESEX 9. TMWKHRS 10. TPTOTINC 11. EBORNUS 12. TIMSTAT
+require("data.table")
+require("bit64")
 
-pu <- fread("./data/pu2020.csv", sep = "|", select = c(
-  
-  #Common case identification variables
-	'SSUID','PNUM','MONTHCODE','TEHC_ST','TAGE','EEDUC','EMS_EHC', 'ERLRPE', 'ERACE', 'ESEX', 'TMWKHRS', 'TPTOTINC', 'EBORNUS',"ECITIZEN","ENATCIT",'TIMSTAT'))
+pu = fread("./data/pu2020.csv", sep="|", select = c('SSUID','PNUM','MONTHCODE','TEHC_ST','TAGE','EEDUC',
+                      'EMS_EHC', 'ERELRPE', 'ERACE', 'ESEX', 'TMWKHRS', 'TPTOTINC',
+                      'EBORNUS',"ECITIZEN","ENATCIT",'TIMSTAT'))
 ```
 
-```{r}
-sipp_immi = pu %>% 
-  filter(TEHC_ST == 34) %>% 
-  filter(MONTHCODE == 10) %>% 
-  filter(TAGE > 17)
-```
+#### STEP 2: Data Preprocessing
 
-```{r}
-sipp_immi %>% 
+```{r data extraction}
+# transform ACS individual data; remove extra variables
+frs_individuals1 = frs_individuals %>% 
+  select(-c(RT,DIVISION,SPORDER,REGION,ADJINC)) %>% 
   mutate(
-    id = paste0(SSUID,"_",PNUM)
+    id = paste0(SERIALNO,"_",PUMA)
   ) %>% 
-  relocate(id,everything()) %>% 
-  select(-c(SSUID,PNUM,MONTHCODE)) %>% 
-  filter(EBORNUS != 1)
+  select(id, everything()) %>% 
+  select(-PUMA) %>% 
+  select(-c(PWGTP1:PWGTP80))
+
+# Select covariates and outcome (individual income) for imputation
+# 1. person reference/state 2. age 3. class of work (unnecessary) 4. education level 5. marital status 6. relationship 7. race. 8. gender. 9. work hours 10. personal income 11. Nativity 12. 
+acs_model = frs_individuals1 %>% 
+  select(id, SERIALNO, AGEP, SCHL, MSP, RELSHIPP, RAC1P, SEX, WKHP, PINCP, NATIVITY, CIT) %>% 
+  mutate(
+    immigration_status = NA
+  )
+
+# Limit the SIPP data to only New Jersey entries; extract monthly data from October
+# create new identifier, remove unnecessary variables
+sipp_model = pu %>% 
+  filter(TEHC_ST == 34) %>% 
+  distinct(SSUID,PNUM,.keep_all=T) %>% 
+  mutate(
+    id = paste0(SSUID,"_", PNUM)
+  ) %>% 
+  select(-MONTHCODE, -TEHC_ST, -PNUM, -ENATCIT) %>% 
+  relocate(id, everything())
 ```
+
+```{r acs variable processing}
+# rename and recode the ACS data
+acs_model1 = acs_model %>% 
+  rename(
+    household_id = SERIALNO, age = AGEP, education = SCHL, marital_status = MSP, relationship = RELSHIPP,
+    race = RAC1P, sex = SEX, work_hrs = WKHP, income = PINCP, nativity = NATIVITY, citizenship = CIT
+  ) %>% 
+  mutate(
+    # recode education
+    education = case_when(education == 1 ~ "no schooling",education == 2 ~ "preschool",
+                          education == 3 ~ "kindergarten",education == 4 ~ "grade1",
+                          education == 5 ~ "grade2", education == 6 ~ "grade3", 
+                          education == 7 ~ "grade4", education == 8 ~ "grade5", education == 9 ~ "grade6",
+                          education == 10 ~ "grade7" ,education == 11 ~ "grade8" , 
+                          education == 12 ~ "grade9" , education == 13 ~ "grade10" , 
+                          education == 14 ~ "grade11" , education == 15 ~ "grade12_no_diploma" ,
+                          education == 16 ~"high school diploma", education == 17 ~ "GED" , 
+                          education == 18 ~ "some college",education == 19 ~"1 or more year college, no degree",
+                          education == 20 ~"associates' degree", education == 21 ~ "bachelor's degree",
+                          education == 22 ~ "master's degree", education == 23 ~ "professional degree beyond bachelor's", education == 24 ~"doctorate degree", is.na(education) ~ "under 3 years old")) %>% 
+  mutate(
+    # recode marital status
+    marital_status = case_when(
+      marital_status == 1 ~ "married, spouse present", marital_status == 2 ~ "married, spouse absent",
+      marital_status == 3 ~ "widowed", marital_status == 4 ~ "divorced", marital_status == 5 ~ "separated",
+      marital_status == 6 ~ "nevermarried", is.na(marital_status) ~ "under 15 years old"
+    )
+  ) %>% 
+  mutate(
+    relationship = case_when(
+      relationship == 20 ~ "reference", relationship == 21 ~ "opposite-sex spouse", 
+      relationship == 22 ~ "opposite-sex partner", relationship == 23 ~ "same-sex spouse", 
+      relationship == 24 ~ "same-sex partner", relationship == 25 ~ "child", relationship == 26 ~ "child", 
+      relationship == 27 ~ "child", relationship == 28 ~ "sibling", relationship == 29 ~ "parent", relationship == 30 ~ "grand-child", relationship == 31 ~ "in-law-relatives", relationship == 32 ~ "in-law-relatives", 
+      relationship == 33 ~ "other relative", relationship == 34 ~ "roommate", relationship == 35 ~ "child", 
+      relationship == 36 ~ "other nonrelative", relationship == 37 ~ "roomer/border", relationship == 38 ~ "roomer/border"
+    ) 
+  ) %>% 
+  mutate(
+    race = case_when(
+      race == 1 ~ "White", race == 2 ~ "Black", race == 3 ~ "Native American", race == 4 ~ "Alaaska Native",
+      race == 5 ~ "Native American specified", race == 6 ~ "Asian", race == 7 ~ "Hawaiian Native",
+      race == 8 ~ "Some other races", race == 9 ~ "two or more races"
+    )
+  ) %>% 
+  mutate(
+    sex = ifelse(sex == 1, "male", "female")
+  ) %>% 
+  mutate(
+    nativity = ifelse(nativity == 1, "native", "foreigner")
+  ) %>% 
+  mutate(
+    citizenship = case_when(
+      citizenship == 1 ~ "U.S born citizen", citizenship == 2 ~ "U.S territory born citizen",
+      citizenship == 3 ~ "born abroad to American parents", citizenship == 4 ~ "citizen by naturalization",
+      citizenship == 5 ~ "not a citizen of U.S."
+    )
+  ) %>% 
+  mutate(
+    work_hrs = ifelse(age > 16 & is.na(work_hrs),0,work_hrs)
+  )
+  # mutate(
+  #   education = as.factor(education),
+  #   marital_status = as.factor(marital_status),
+  #   relationship = as.factor(relationship),
+  #   race = as.factor(race),
+  #   sex = as.factor(sex),
+  #   nativity = as.factor(nativity),
+  #   citizenship = as.factor(citizenship))
+
+
+```
+
+```{r sipp variable processing}
+# rename the variables in SIPP data so that it aligns with acs_model
+colnames(sipp_model) = colnames(acs_model1)
+
+sipp_model1 = sipp_model %>% 
+  mutate(
+    education = case_when(
+      education == 31 ~ "Less than 1st grade", education == 32 ~ "1st, 2nd, 3rd or 4th grade", education == 33 ~ "5th or 6th grade", education == 34 ~ "7th or 8th grade",
+      education == 35 ~ "9th grade", education == 36 ~ "10th grade", education == 37 ~ "11th grade", education == 38 ~  "12th grade, no diploma", 
+      education == 39 ~"high school diploma/GED", education == 40 ~ "some college", education == 41 ~"1 or more year college, no degree",
+      education == 42 ~"associates' degree", education == 43 ~ "bachelor's degree",
+      education == 44 ~ "master's degree", education == 45 ~ "professional degree beyond bachelor's", education == 46 ~"doctorate degree",
+    )
+  ) %>% 
+  mutate(
+      marital_status = case_when(
+          marital_status == 1 ~ "married, spouse present", marital_status == 2 ~ "married, spouse absent",
+          marital_status == 3 ~ "widowed", marital_status == 4 ~ "divorced", marital_status == 5 ~ "separated",
+          marital_status == 6 ~ "nevermarried", is.na(marital_status) ~ "under 15 years old"
+    )
+  ) %>% 
+  mutate(
+    relationship = case_when(
+      relationship == 1 ~ "reference", relationship == 2 ~ "reference", relationship == 3 ~ "opposite-sex spouse", 
+      relationship == 4 ~ "opposite-sex partner", relationship == 5 ~ "same-sex spouse", relationship == 6 ~ "same-sex partner", 
+      relationship == 7 ~ "child", relationship == 8 ~ "grand-child", relationship == 10 ~ "sibling", 
+      relationship == 9 ~ "parent", relationship == 11 ~ "in-law-relatives", relationship == 12 ~ "in-law-relatives",
+      relationship == 13 ~ "other relative",relationship == 14 ~ "other relative", relationship == 16 ~ "roommate", relationship == 15 ~ "child", 
+      relationship == 18 ~ "other nonrelative", relationship == 17 ~ "roomer/border")
+  ) %>% 
+  mutate(
+    race = case_when(
+      race == 1 ~ "white", race == 2 ~ "black", race == 3 ~ "asian", race == 4 ~ "other"
+    )
+  ) %>% 
+  mutate(
+    sex = ifelse(sex == 1, "male", "female")
+  ) %>% 
+  mutate(
+    nativity  = ifelse(nativity == 1, "native", "foreigner")
+  ) %>% 
+  mutate(
+    citizenship = ifelse(citizenship == 1, "citizen", "Non-citizen")
+  ) %>% 
+  mutate(
+    immigration_status = ifelse(immigration_status == 1, "permanent", "other")
+  ) %>% 
+  mutate(
+    education = ifelse(age < 3, "under 3 years old", education)
+  ) %>% 
+  mutate(
+    income = 12*income
+  ) %>% 
+  mutate(
+    work_hrs = ifelse(is.na(work_hrs) & age > 16, 0, work_hrs)
+  ) %>% 
+  mutate(
+    income = ifelse(age < 15, NA, income)
+  ) 
+  # mutate(
+  #   education = as.factor(education),
+  #   marital_status = as.factor(marital_status),
+  #   relationship = as.factor(relationship),
+  #   race = as.factor(race),
+  #   sex = as.factor(sex),
+  #   nativity = as.factor(nativity),
+  #   citizenship = as.factor(citizenship),
+  #   immigration_status = as.factor(immigration_status)
+  # )
+```
+
+```{r match ACS inputs with SIPP inputs}
+acs_model2 = acs_model1 %>% 
+  mutate(
+    education = case_when(
+      education == "under 3 years old" ~ "under 3 years old",
+      education == "grade1" |education == "grade2"| education == "grade3"|education == "grade4" ~ "1st, 2nd, 3rd or 4th grade",
+      education == "preschool" | education == "no schooling" | education == "kindergarten" ~ "Less than 1st grade",
+      education == "grade5" | education == "grade6" ~ "5th or 6th grade",
+      education == "grade7" | education == "grade8" ~ "7th or 8th grade",
+      education == "grade9" ~ "9th grade",
+      education == "grade10" ~ "10th grade",
+      education == "grade11" ~ "11th grade",
+      education == "grade12_no_diploma" ~ "12th grade, no diploma",
+      education == "high school diploma" | education == "GED" ~ "high school diploma/GED",
+      education == "some college" ~ "some college", education == "1 or more year college, no degree" ~ "1 or more year college, no degree",
+     education == "associates' degree" ~ "associates' degree", education == "bachelor's degree" ~ "bachelor's degree",
+     education == "master's degree" ~ "master's degree" , education == "professional degree beyond bachelor's" ~ "professional degree beyond bachelor's" , education == "doctorate degree" ~ "doctorate degree"
+     )
+  ) %>% 
+  mutate(
+    race = case_when(
+      race == "White" ~ "white", race == "Black" ~ "black", race=="Asian" ~ "asian", 
+      (race != "White" & race != "Black" & race != "Asian") ~ "other"
+    )
+  ) %>% 
+  mutate(
+    citizenship = ifelse(citizenship == "born abroad to American parents" | citizenship == "citizen by naturalization" |
+                            citizenship == "U.S born citizen" | citizenship == "U.S territory born citizen","citizen","Non-citizen")
+  ) 
+```
+
+**ACS**
+* `id` is combo of SERIALNO and individual num
+* `household_id` is the SERIALNO
+* `education` has 17 unique level; complete
+* `marital_status` has 7 values; complete
+* `relationship` has 13 unique values; complete
+* `race` has 4 unique values; complete. `sex` has 2 unique values; complete
+* `nativity` and `citizenship` both have two values; complete
+* `age` continuous and complete; `work_hrs` has complete rate of 0.578, incomplete values are for age < 16.
+* `income`has complete rate of 0.629; incomplete values are for age < 15
+* 
+
+```{r ACS data exclusion/inclusion criterea}
+acs_model2 %>% 
+  skimr::skim()
+```
+
+**SIPP**
+
+* * `id` is combo of USSID and individual num
+* `household_id` is the USSID
+* `education` has complete rate of 0.854; age< 15 are the NA values (COULD BE IMPUTED)
+* `marital_status` is complete
+* `relationship` is incomplete - due to being partial referenced/or temporarily outside of U.S./military (COULD BE IMPUTED)
+* `race` has 4 unique values; complete. `sex` has 2 unique values; complete
+* `nativity` and `citizenship` both have two values; complete
+* `immigration_status`; 2 unique values; NA for non-natives
+* `age` continuous and complete variable;
+* `work_hrs` complete rate of 0.808, NA values are age < 16
+* `income`has complete rate of 0.816; incomplete values are for age < 15
+
+```{r sipp data exclusion/inclusion critiria}
+sipp_model1 %>% 
+  skimr::skim()
+```
+
+#### STEP 3: Within Survey Imputation
+
+##### Model Specifications
+
+**Is MAR assumption plausible**
+* YES. Because we know that within the NA values only arise out of certain age/nativity exclusion criteria. Within the different strata, there are no missing values (hence MCAR).
+* the reason for missing entries are not unknown to us.
+
+**Form of imputation model**
+
+**Variables to include as predictors**
+* everything but the id
+
+**impute variables that are functions of other variables**
+* YES. given that they are relevant to the variables of interest
+
+**variable imputation sequence**
+* Check by the number of missing values
+
+**starting imputations and # of iterations**
+* need to monitor the convergence of MICE algorithm
+
+**choose the number of multiply imputed datasets**
+* 
+```{r combine the two datasets}
+# combine the ACS and the SIPP data-sets
+combined_data = acs_model2  %>% 
+  rbind(sipp_model1) %>% 
+  mutate(
+    education = as.factor(education),
+    marital_status = as.factor(marital_status),
+    relationship = as.factor(relationship),
+    race = as.factor(race),
+    sex = as.factor(sex),
+    nativity = as.factor(nativity),
+    citizenship = as.factor(citizenship),
+    immigration_status = as.factor(immigration_status)
+  )  %>% 
+  mutate(
+    data_source = as.factor(ifelse(str_detect(id,"[A-Z]"),"ACS","SIPP"))
+  ) 
+```
+
+
+```{r prediction matrix}
+# generate prediction matrix
+pred_mat = quickpred(combined_data[3:ncol(combined_data)], mincor = 0.1)
+```
+
+```{r conditional imputation rules}
+# set rules on conditional imputation
+post = make.post(combined_data[3:ncol(combined_data)])
+
+# for those younger than 3 years old, set education to three years old
+post["education"] <- "imp[[j]][data$age[!r[, j]] < 3, i] <- levels(sipp_model2$education)[17]"
+
+# for those who are natives,do not impute immigration status
+post["immigration_status"] <- "imp[[j]][data$nativity[!r[, j]] == levels(data$nativity)[2], i] <- NA"
+
+# for age < 16, no need for work hours
+post["work_hrs"] <- "imp[[j]][data$age[!r[, j]] < 16, i] <- NA"
+
+# for age < 15, no need for income
+post["income"] <- "imp[[j]][data$age[!r[, j]] < 15, i] <- NA"
+```
+
+```{r conditional imputation using mice package}
+combined_imp = mice((combined_data[3:ncol(combined_data)]), m = 1, predictorMatrix = pred_mat, 
+                visitSquence = "monotone", maxit = 5, 
+                post = post, seed =1111)
+```
+
+```{r extract complete imputation data}
+# depending on the number of m's; the id cols might have to rbind() itself m times.
+
+complete_imputation = combined_imp %>% 
+  mice::complete() %>% 
+  cbind(combined_data[1:2]) %>% 
+  relocate(id,household_id,everything())
+```
+
+```{r}
+xyplot(combined_imp,  immigration_status ~ data_source | .imp,
+       )#|.imp,)
+```
+
+```{r}
+sipp_model2 %>% 
+  filter(citizenship == "citizen" & nativity == "foreigner" & is.na(immigration_status))
+```
+
 
