@@ -111,7 +111,7 @@ sub statetax {
 	our $ctc_max_income_alt = 0;						#policy modeling option
 	our $state_ctc_recd = 0;
 	our $potential_state_eic_recd = 0;
-	
+	our $local_tax_credits = 0; 	
 	# DELETE below ONCE PROGRAMMED INTO PHP/discussed with Brittany/Renee
 
 	#$in->{'eitc_income_threshold_alt'} = 0; #policy modeling option: we decided against including this because it was a holdover from pre ARPA changes. Commening out this next policy option, pending clarification from Brittany and discussion of how this particular EITC expansion is an approximation of the ARPA EITC expansion for filers without dependents. 
@@ -142,7 +142,6 @@ sub statetax {
 			#
 			
 			$health_ded = pos_sub($out->{'health_expenses'}, $med_expense_deduction_std * $state_gross_inc);
-
 			#FUTURE NOTE: adult student dependents less than 22 years old also have a separate exemption claim (note this does not match the federal definition fo under 24), as do veterans.
 			#Calculate exemptions.
 			#Start with child exemptions. Only children/dependents with an SSN or an ITIN are eligible for exemption amount
@@ -180,7 +179,6 @@ sub statetax {
 			}
 			#We have to calculate an alternate tax calculation as if the property tax deduction is not claimed, so that we can figure out if the property tax credit is better for the filer. This follows NJ's income tax instructions.
 			$adj_state_tax_inc = $state_tax_inc - &least($rent_prop_tax, $prop_tax_ded_max);
-			
 			#Calculate NJ income tax, gross.
 			if($out->{'filing_status'} eq 'Single') {
 				for ($state_tax_inc) {
@@ -276,9 +274,7 @@ sub statetax {
 			$prop_tax_credit_recd = 50;
 		}
 		$state_tax_inc = pos_sub($state_tax_inc, $prop_tax_ded); #We deduct the refundable credit, which can be positive or 0, as a refundable credit below.
-
-		$state_tax_gross = pos_sub($state_tax_rate * $state_tax_inc - $less_amt);
-		
+		$state_tax_gross = pos_sub($state_tax_rate * $state_tax_inc, $less_amt);
 
 		#NJ Child Care Tax Credit:
 		if ($in->{'state_cadc_incomelimit_alt'} == 1) { 	 
@@ -382,7 +378,7 @@ sub statetax {
 	# Calculate NJ state payroll taxes.
 	
 	for (my $i = 1; $i <= $in->{'family_structure'}; $i++)	{
-		$state_payroll_tax += least($out->{'parent'.$i.'taxable_earnings'}, $ui_base_salary) * ($ui_rate +  $wfswf_rate) + least($out->{'parent'.$i.'taxable_earnings'},$fli_base_salary) * ($fli_rate + $di_rate); 
+		$state_payroll_tax += least($out->{'parent'.$i.'_taxable_earnings'}, $ui_base_salary) * ($ui_rate +  $wfswf_rate) + least($out->{'parent'.$i.'_taxable_earnings'},$fli_base_salary) * ($fli_rate + $di_rate); 
 		#LOOK AT ME: parent#_taxable_earnings includes fli+tdi when defined in fedtax. However, fli and tdi are not taxed at the state level. once we program in UI, we need to make sure to parse it out by parent# subtract it from parent#_taxable_earnings.
 		#We decided that undocumented folks without an itin don't pay payroll taxes. We're essentially adopting a "do no felony" stance on this, since in order to pay payroll taxes, a person will need to fake having a social security number, which is identity fraud. #parents#_earnings_taxes = taxable earnings. this is 0 if the parent is undocumented and doesn't have an ITIN.
 	}
@@ -394,16 +390,17 @@ sub statetax {
 	#Incorporate state payroll taxes and calculate tax before credits and tax after credits
 	
 	$state_tax_credits = $state_eic_recd + $prop_tax_credit_recd + $state_cadc_recd + $state_ctc_recd + $additional_state_tax_credits + $middle_class_tax_rebate;
+
+	$local_tax_credits = 0; #No local tax credits in NJ. Newark is the only locality that has an income tax and it is employer-paid.
 	
 	$state_tax = &pos_sub($state_tax_gross, $state_tax_credits) + $state_payroll_tax;
-	
 	$tax_before_credits = $out->{'federal_tax_gross'} + $state_tax_gross  + $state_payroll_tax;
 	
 	$tax_after_credits = $tax_before_credits - $out->{'federal_tax_credits'} - $state_tax_credits;
 	
 	
 	# outputs
-	foreach my $name (qw(state_tax state_eic_recd prop_tax_credit_recd state_cadc_recd state_tax_gross state_tax_credits tax_before_credits tax_after_credits eitc_recd)) { #added recalculated federal eitc here. 
+	foreach my $name (qw(state_tax state_eic_recd prop_tax_credit_recd state_cadc_recd state_tax_gross state_tax_credits tax_before_credits tax_after_credits eitc_recd local_tax_credits)) { #added recalculated federal eitc here. 
 		$self{'out'}->{$name} = ${$name}; 
     }
 

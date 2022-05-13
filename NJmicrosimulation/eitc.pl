@@ -23,7 +23,7 @@
 #		filing_status
 #=============================================================================#
 
-use Switch;
+#use Switch;
 
 sub eitc
 {
@@ -117,8 +117,8 @@ sub eitc
 			$eitc_recd = 0; 
 		} else {
 			# Use EITC table to determine (based on family_structure and child_number):
-			switch ($eitc_eligible_children) {
-			  case 0 {
+			#switch ($eitc_eligible_children) {
+			if ($eitc_eligible_children == 0) {
 				if ($in->{'covid_eitc_expansion'} == 1) { #Here's the expansion:
 					#These figures were derived from ARPA, the EITC law, a helpful CRS report on the matter, and interpretations from previous IRS updates to the EITC law to reflect inflation. Under "normal years," the IRS releases statements with all these figures and updates, but the additional calculations are detailed below because the IRS has not released a similar guidance as they have for previous annual updates to EITC and other tax figures. Hence, the lengthy explanations for the numbers derived below.
 					#ARPA indicates the phase-in and phase-out for the EITC is 15.3%, a change from the 7.65% of the original EITC law. 
@@ -144,40 +144,35 @@ sub eitc
 					$eitc_plateau_end  = ($eitc_family_structure == 1 ? 8880 : 14820);
 					$eitc_income_limit = ($eitc_family_structure == 1 ? 15980 : 21920);
 				}
-			  }
-			  case 1 {
+			} elsif ($eitc_eligible_children == 1) {
 				$eitc_phasein_rate = 0.34;
 				$eitc_plateau_start = 10640;
 				$eitc_max_value = 3618;
 				$eitc_phaseout_rate = 0.1598;		
 				$eitc_plateau_end  = ($eitc_family_structure == 1 ? 19520 : 25470);
 				$eitc_income_limit = ($eitc_family_structure == 1 ? 42158 : 48108);
-			  }
-			  case 2 {
+			} elsif ($eitc_eligible_children == 2) {
 				$eitc_phasein_rate = 0.4;
 				$eitc_plateau_start = 14950;	
 				$eitc_max_value = 5980;		
 				$eitc_phaseout_rate = 0.2106;		
 				$eitc_plateau_end  = ($eitc_family_structure == 1 ? 19520 : 25470);
 				$eitc_income_limit = ($eitc_family_structure == 1 ? 47915 : 53865);
-			  }
-			  case 3 {
+			} elsif ($eitc_eligible_children == 3) {
 				$eitc_phasein_rate = 0.45;
 				$eitc_plateau_start = 14950;	
 				$eitc_max_value = 6728;		
 				$eitc_phaseout_rate = 0.2106;
 				$eitc_plateau_end  = ($eitc_family_structure == 1 ? 19520 : 25470);
 				$eitc_income_limit = ($eitc_family_structure == 1 ? 51464 : 57414);
-			  }          
-			  case 4 {
+			} elsif ($eitc_eligible_children == 4) {
 				 $eitc_phasein_rate = 0.45;
 				$eitc_plateau_start = 14950;		
 				$eitc_max_value = 6728;			
 				$eitc_phaseout_rate = 0.2106;
 				$eitc_plateau_end  = ($eitc_family_structure == 1 ? 19520 : 25470);
 				$eitc_income_limit = ($eitc_family_structure == 1 ? 51464 : 57414);
-			  }
-			  case 5 {
+			} elsif ($eitc_eligible_children == 5) {
 				$eitc_phasein_rate = 0.45;
 				$eitc_plateau_start = 14950;			
 				$eitc_max_value = 6728;					
@@ -185,9 +180,9 @@ sub eitc
 				$eitc_plateau_end  = ($eitc_family_structure == 1 ? 19520 : 25470);	
 				$eitc_income_limit = ($eitc_family_structure == 1 ? 51464 : 57414);	
 
-			  }
 			}
-		 if ($out->{'federal_adjusted_gross_income'} >= $eitc_income_limit) { #The first test for EITC is actually whether either gross income or earned exceed the EITC income limit, as gross income can be less than earnings in some cases, but for the FRS as construed as of 2020, gross income will never be lower than earned income. So we just test initially for gross income here.
+			
+			if ($out->{'federal_adjusted_gross_income'} >= $eitc_income_limit) { #The first test for EITC is actually whether either gross income or earned exceed the EITC income limit, as gross income can be less than earnings in some cases, but for the FRS as construed as of 2020, gross income will never be lower than earned income. So we just test initially for gross income here.
 				$eitc_recd = 0; 
 			} elsif($taxable_earnings < $eitc_plateau_start) { #Previous simulator years had this as earnings plus interest, but gross income is only considered when gross income exceeds the EITC plateau start.
 				$eitc_recd = $eitc_phasein_rate * $taxable_earnings; 

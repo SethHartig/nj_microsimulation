@@ -75,6 +75,7 @@ sub unemployment
 	our $parent3_fpuc_recd = 0; #The amount of FPUC each unemployed person is initially receiving.
 	our $parent4_fpuc_recd = 0; #The amount of FPUC each unemployed person is initially receiving.
 	our $fpuc_recd = 0;
+	our $ui_recd_m = 0; #Need to figure this out, later. Right now we are expressing this as an average UI amount per month over the course of a year, but it usually varies by month.
 	
 	
 	# Note for potential additional populations: Only U.S. citizens and immigrants authorized to work in the U.S. can claim unemployment benefits. Currently the FRS/MTRC tool is not built for non-eligible populations, but if we eventually add them, this will be an important rule.
@@ -145,7 +146,7 @@ sub unemployment
 		$dependency_allowance = &least($ui_dependency_allowance_max, $ui_dependency_allowance_perchild * ($in->{'child_number'} + $out->{'adult_children'})); 
 		$ui_recd += $dependency_allowance * $potential_dependency_allowance_weeks;
 	}
-
+	$ui_recd_m = $ui_recd/12;
 	# outputs
     foreach my $name (qw(ui_recd ui_recd_m parent1_ui_recd parent2_ui_recd parent3_ui_recd parent4_ui_recd fpuc_recd parent1_fpuc_recd parent2_fpuc_recd parent3_fpuc_recd parent4_fpuc_recd)) {
 		$self{'out'}->{$name} = ${$name}; 

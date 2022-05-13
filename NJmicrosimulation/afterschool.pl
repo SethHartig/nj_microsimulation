@@ -49,14 +49,18 @@ sub afterschool
 	# 2 Check for afterschool eligibility (and enrollment) by age. 
 	#
 
+		foreach my $datum (qw(summerweeks)) {	
+			${$datum} = &csvlookup($in->{'dir'}.'\FRS_Locations.csv', $datum, 'id', $in->{'residence'});
+		}
 
-		my $sql = "SELECT DISTINCT summerweeks FROM FRS_Locations WHERE state = ? && year = ? && id = ?";
-		my $stmt = $dbh->prepare($sql) ||
-			&fatalError("Unable to prepare $sql: $DBI::errstr");
-		$stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}) ||
-			&fatalError("Unable to execute $sql: $DBI::errstr");
-		$summerweeks = $stmt->fetchrow();
-
+		if (1 == 0) { #EquivalentSQL
+			my $sql = "SELECT DISTINCT summerweeks FROM FRS_Locations WHERE state = ? && year = ? && id = ?";
+			my $stmt = $dbh->prepare($sql) ||
+				&fatalError("Unable to prepare $sql: $DBI::errstr");
+			$stmt->execute($in->{'state'}, $in->{'year'}, $in->{'residence'}) ||
+				&fatalError("Unable to execute $sql: $DBI::errstr");
+			$summerweeks = $stmt->fetchrow();
+		}
 
 		for(my $i=1; $i<=5; $i++) {
 			if(($in->{'prek'} == 1 && ($in->{'child' . $i . '_age'} == 3 || $in->{'child' . $i . '_age'} ==4)) || ($in->{'child' . $i . '_age'} >= 5 && $in->{'child' . $i . '_age'} <=13)) {

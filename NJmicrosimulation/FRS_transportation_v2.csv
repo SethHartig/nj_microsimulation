@@ -1,0 +1,8 @@
+transport_id,residence_size,percent_nonsocial,percent_work,avg_miles_driven,year
+13,upto250000,0.774,0.230,9801.45,2021
+14,upto500000,0.768,0.229,10203.88,2021
+15,upto1million,0.773,0.243,10281.17,2021
+16,upto3million,0.768,0.245,10738.96,2021
+17,over3million,0.767,0.247,10166.73,2021
+18,rural,0.779,0.218,9563.25,2021
+19,dummy,0.779,0.218,9563.25,2021

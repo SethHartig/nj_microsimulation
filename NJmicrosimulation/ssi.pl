@@ -86,7 +86,7 @@ sub ssi
 	our $deemed_unearned_income	= 0;
 	our $deemed_disregard_remainder = 0;
 	our $deemed_earned_income = 0;
-	our $parental_allocation = qw(791 1191) [$in->{'family_structure'}];
+	our $parental_allocation = qw(0 791 1191) [$in->{'family_structure'}];
 	our $fbr_difference = 0;
 	our $deemed_income_perchild = 0;
 	our $child_ssi_recd = 0;
@@ -184,6 +184,7 @@ sub ssi
 				
 				if ($in->{'ssi'} && $ssi_assets <= $applicable_asset_limit) {
 					$ssi_recd_mnth = &pos_sub($fbr_individual + $out->{'ssp_individual'}, $ssi_income);
+					
 
 					#Incorporating any state supplement payments that increase the amount of SSI received by the entire household. Outputs used here as inputs are generated in state SSP codes. New Jersey is an example of a state with this program; some SSI recipients can get a supplement added to their SSI check to help pay for the cost of utilities. It appears implicit in this policy that only adults would receive this benefit, as it is directed at individuals who pay utility bills.					
 					if ($ssi_recd_mnth > 0) {
@@ -200,7 +201,7 @@ sub ssi
 				
 				if ($in->{'ssi'} && $ssi_assets <= $applicable_asset_limit) {
 					$ssi_recd_mnth = &pos_sub($fbr_couple + $out->{'ssp_couple'}, $ssi_income);
-
+					
 					#Incorporating any state supplement payments that increase the amount of SSI received by the entire household:
 					if ($ssi_recd_mnth > 0) {
 						$ssi_recd_mnth += $out->{'ssp_household'};
@@ -242,9 +243,11 @@ sub ssi
 				$gross_ineligible_parent_unearned_income_m = $interest_m + (1- $in->{'covid_ui_disregard'}) * ($out->{'parent'.$ssi_ineligible_parent_id.'_fli_recd'}/12 + $out->{'parent'.$ssi_ineligible_parent_id.'_tdi_recd'}/12 + $out->{'parent'.$ssi_ineligible_parent_id.'_ui_recd'}/12) + $out->{'gift_income_m'}/$in->{'family_structure'};
 
 				$ineligible_parent_unearned_income = &pos_sub($gross_ineligible_parent_unearned_income_m, $deemed_child_allocation);
-
+				
+				
 				if ($deemed_child_allocation > $gross_ineligible_parent_unearned_income_m) {
 					$ineligible_parent_earned_income = &pos_sub($ineligible_parent_earnings, ($deemed_child_allocation - $gross_ineligible_parent_unearned_income_m));
+				
 				
 				} else {
 					$ineligible_parent_earned_income = $ineligible_parent_earnings;
@@ -257,12 +260,14 @@ sub ssi
 				if (($ineligible_parent_unearned_income + $ineligible_parent_earned_income) <=  ($fbr_couple - $fbr_individual)) { 
 				
 					$ssi_income = &pos_sub((&pos_sub($eligible_parent_unearned_income_m, 20) + (.5 * (&pos_sub($earnings_mnth, (65 + &pos_sub(20,$eligible_parent_unearned_income_m)))))), $in->{'disability_work_expenses_m'});
+					
 					#We can use the above deemed income calculationin the hlth code, for various Medicaid determinations.
 					$ssi_unearned_income = &pos_sub($eligible_parent_unearned_income_m, 20);
 					$ssi_earned_income = pos_sub(.5 * &pos_sub($earnings_mnth, 65 + &pos_sub(20,$eligible_parent_unearned_income_m)),$in->{'disability_work_expenses_m'});
 					
-					if ($in->{'ssi'} == 1 && $ssi_assets <= $applicable_asset_limit) {
-						$ssi_recd_mnth = &pos_sub($fbr_individual + $out->{'ssp_individual_in_couple'}, $ssi_income); 
+					
+					if ($in->{'ssi'} == 1 && $ssi_assets <= $applicable_asset_limit) { 
+						$ssi_recd_mnth = &pos_sub($fbr_individual + $out->{'ssp_individual_in_couple'}, $ssi_income);
 					}
 					
 				} else {
@@ -388,18 +393,25 @@ sub ssi
 					#The below step-by-step process is described at  https://secure.ssa.gov/poms.nsf/lnx/0501320500. 
 
 					$demable_unearned_income = pos_sub($monthly_countable_unearned_income, $nondisabled_child_allocation * $number_nondisabled_children);
+					
 
 					$allocation_remainder = pos_sub($nondisabled_child_allocation * $number_nondisabled_children, $monthly_countable_unearned_income);
+					
 
 					$demable_earned_income = pos_sub($monthly_countable_earned_income, $allocation_remainder);
+					
 
 					$deemed_unearned_income = pos_sub($demable_unearned_income, 20); #We may want to add a policy variable indicating 20 is the value of the income disregard, and create a variable based on that. But this is clearer for now.
+					
 
 					$deemed_disregard_remainder = pos_sub(20, $demable_unearned_income);
-
+					
+					
 					$deemed_earned_income = (1 - .5) * pos_sub($demable_earned_income, $deemed_disregard_remainder + 65);
+					
 
 					$deemed_income = pos_sub($deemed_unearned_income + $deemed_earned_income, $parental_allocation);
+					#maybe this.
 				}
 
 				#Deem income to disabled children.

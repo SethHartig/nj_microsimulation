@@ -78,7 +78,7 @@ sub general {
 	#This was the experiment I needed to set up the csvlookup function.
 	#if (1 == 0) {
 	#	#** again, csv lookup, but for a table we've used SQL for:
-	#	open(TEST3, '<', $in->{'dir'}.'\FRS_Locations_(NJ_2021)_complete_021122.csv') or die "Couldn't open policy options file $!";
+	#	open(TEST3, '<', $in->{'dir'}.'\FRS_Locations.csv') or die "Couldn't open policy options file $!";
 	#
 	#	while (my $table_line = <TEST3>) {
 	#		# For now, during the code debugging phase, I am manually checking each variables needed and assigning its value based on the column in the input CSV code. Eventually, once the input names match, I plan to write a simple script that extracts the values based on column name instead of column number.
@@ -105,15 +105,16 @@ sub general {
 	#		}
 	#	}
 	#	close TEST3;
-	#	#** end csv replication of SQL lookup. This should be made into a "utility function" that appears at the bottom of runfrsnj, programmed to correspond to unique lookups, e.g. $in->{'residence'} = &csvlookup(FRS_Locations_(NJ_2021)_complete_021122.csv, name, $in->{'residence_nj'}, id). The number of arguments could determine how many times a for-loop cycles through the arguemnts to check that the conditions are met.
+	#	#** end csv replication of SQL lookup. This should be made into a "utility function" that appears at the bottom of runfrsnj, programmed to correspond to unique lookups, e.g. $in->{'residence'} = &csvlookup(FRS_Locations.csv, name, $in->{'residence_nj'}, id). The number of arguments could determine how many times a for-loop cycles through the arguemnts to check that the conditions are met.
 	#} else {
-	$in->{'residence'} = &csvlookup($in->{'dir'}.'\FRS_Locations_(NJ_2021)_complete_021122.csv', 'id', 'name', $in->{'residence_nj'});
+
+	$in->{'residence'} = &csvlookup($in->{'dir'}.'\FRS_Locations.csv', 'id', 'name', $in->{'residence_nj'});
 	#}
 	
 	#print 'residence_nj ='.$in->{'residence_nj'}."\n"; 
 	#print 'table name ='.$table->{'name'}."\n"; 
-	#print 'residence ='.$in->{'residence'}."\n"; 
-
+	print 'SERIALNO = '.$in->{'SERIALNO'}."\n";
+	print 'residence ='.$in->{'residence'}."\n"; 
 	#$sql = "SELECT id from FRS_Locations WHERE state = ? AND year = ? AND name = ?";
     #my $stmt = $dbh->prepare($sql) ||
     #    &fatalError("Unable to prepare $sql: $DBI::errstr");
@@ -126,7 +127,7 @@ sub general {
 	#NOTE TO CHONG: I'm modeling this lookup as if there was a SQL table for this list, so that if you find an easy find-and-replace soluation to chaneg all the SQL queries to csv queries, you can do the same here. There is no table like this in the current FRS MySQL database, though. I know there is also likely an easier way to do this for a csv file, similar to hwo the runfrsnj.pl extracts data from the ACS data sheet.
 		
   # set general values
-    $in->{'child_number'} = 0; 
+    $in->{'child_number'} = 0;
 	if ($in->{'year'} >= 2020) { #Beginning in 2020, we are allowing users to model families with no children.
 		if($in->{'child1_age'} != -1) { $in->{'child_number'}++; $in->{'child1'} = 1; }        # first child
 	} else {
@@ -188,14 +189,13 @@ sub general {
   
 	#CHONG, README:
 	#This is the replacement csv lookup function (csvlookup) I've set up to replace all SQL queries. The syntax here is as follows:
-	# The first argument below ($in->{'dir'}.'\FRS_Locations_(NJ_2021)_complete_021122.csv') is the csv file being looked up.
+	# The first argument below ($in->{'dir'}.'\FRS_Locations.csv') is the csv file being looked up.
 	# The second argument is the column in the csv that you would like to return.
 	# The succeeding pairs of arguments first indicate the column in the table you want to look up and then the value you want checked in that column (e.g. 'name' and $in->{'residence_nj'} is one pair and listed third and fourth, while 'number_children' and $in->{'child_number'} are a second pair and thus listed fifth and sixth). This corresponds generally with how th MySQL queries are set up.
 	
 	# Looking up state and id are unnecessary, because for this one, they are always 2021 and NJ.
-    $in->{'fmr'} = &csvlookup($in->{'dir'}.'\FRS_Locations_(NJ_2021)_complete_021122.csv', 'rent', 'name', $in->{'residence_nj'}, 'number_children', $in->{'child_number'});
-	
-	if (1 == 0) {
+    $in->{'fmr'} = &csvlookup($in->{'dir'}.'\FRS_Locations.csv', 'rent', 'name', $in->{'residence_nj'}, 'number_children', $in->{'child_number'});
+	if (1 == 0) { 
 		#This is the equivalent SQL query that the above csvlookup function replaces.
 		my $sql = "SELECT rent FROM FRS_Locations WHERE state = ? AND year = ? AND id = ? AND number_children = ?";
 		my $stmt = $dbh->prepare($sql) ||
@@ -208,13 +208,13 @@ sub general {
 	if($in->{'housing_override'})
     {
         $in->{'rent_cost_m'} = $in->{'housing_override_amt'};
-		$in->{'rent_cost'} = 12 *  $in->{'rent_cost_m'};
     }
     else
     {
         $in->{'rent_cost_m'} = $in->{'fmr'};
-        $stmt->finish();
+        #$stmt->finish();
     }
+	$in->{'rent_cost'} = 12 *  $in->{'rent_cost_m'};
 	# set immigrant-related variables
 	#calculate the number of household members not considered "qualified aliens" for TANF, CCDF, foster care, LIHEAP, Medicare, Medicaid (except assistance for emergency medical condition), CHIP, SSI, and refugee-specific HHS program. This is in accordance with PRWORA and HHS PRWORA guidance on programs for only qualified aliens: https://www.govinfo.gov/content/pkg/FR-1998-08-04/pdf/98-20491.pdf. SSI is not mentioned in this guidance but the definition of qualified alien for purposes of SSI mirrors that in the PRWORA: https://www.ssa.gov/ssi/text-eligibility-ussi.htm#qualified-alien.
 	#qualified aliens in PRWORA defined as LPRs here for 5 or more years, U.S. citizens, refugees, asylees. See section 431 (defines qualified aliens) and section 402 (mentions 5 year ban) of PRWORA full text https://www.congress.gov/104/plaws/publ193/PLAW-104publ193.pdf. 
@@ -244,6 +244,8 @@ sub general {
 				if ($in->{'child'.$i.'_immigration_status'} eq 'daca') {
 					$in->{'daca_child_count'} += 1;
 				}
+			} else {
+				$in->{'child'.$i.'_unqualified'} = 0;
 			}
 		}
 		
@@ -265,6 +267,8 @@ sub general {
 				if ($in->{'parent'.$i.'_immigration_status'} eq	'daca') {
 					$in->{'daca_adult_count'} +=1;
 				}
+			} else {
+				$in->{'parent'.$i.'_unqualified'} = 0;
 			}
 		}
 
@@ -331,30 +335,43 @@ sub general {
 	}
 	
   # get state-specific values
-    $sql = "SELECT fpl, smi, passbook_rate from FRS_General WHERE state = ? AND year = ? AND size = ?";
-    my $stmt = $dbh->prepare($sql) ||
-        &fatalError("Unable to prepare $sql: $DBI::errstr");
-    my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $in->{'family_size'}) ||
-        &fatalError("Unable to execute $sql: $DBI::errstr");
-    ($in->{'fpl'}, $in->{'smi'}, $in->{'passbook_rate'}) = $stmt->fetchrow();
-    $stmt->finish();
+	foreach my $datum (qw(smi fpl passbook_rate)) {	
+		$in->{$datum} = &csvlookup($in->{'dir'}.'\FRS_general.csv', $datum, 'size', $in->{'family_size'});
+	}
+	$in->{'fpl_1person'} = &csvlookup($in->{'dir'}.'\FRS_general.csv', 'fpl', 'size', 1);
+	$in->{'fpl_2people'} = &csvlookup($in->{'dir'}.'\FRS_general.csv', 'fpl', 'size', 2);
 	
-    $sql = "SELECT fpl from FRS_General WHERE state = ? AND year = ? AND size = ?";
-    my $stmt = $dbh->prepare($sql) ||
-        &fatalError("Unable to prepare $sql: $DBI::errstr");
-    my $result = $stmt->execute($in->{'state'}, $in->{'year'}, 1) ||
-        &fatalError("Unable to execute $sql: $DBI::errstr");
-    $in->{'fpl_1person'} = $stmt->fetchrow();
-    $stmt->finish();
+	#print 'passbook_rate= '.$in->{'passbook_rate'}."\n";
+	#print 'fpl= '.$in->{'fpl'}."\n";
+	#print 'smi = '.$in->{'smi'}."\n";
+	#print 'fpl_1person = '.$in->{'fpl_1person'}."\n";
+	#print 'fpl_2people = '.$in->{'fpl_2people'}."\n";
 	
-   $sql = "SELECT fpl from FRS_General WHERE state = ? AND year = ? AND size = ?";
-     my $stmt = $dbh->prepare($sql) ||
-        &fatalError("Unable to prepare $sql: $DBI::errstr");
-    my $result = $stmt->execute($in->{'state'}, $in->{'year'}, 2) ||
-        &fatalError("Unable to execute $sql: $DBI::errstr");
-    $in->{'fpl_2people'} = $stmt->fetchrow();
-    $stmt->finish();
-	
+	if (1 == 0) {	#EquivalentSQL:
+		$sql = "SELECT fpl, smi, passbook_rate from FRS_General WHERE state = ? AND year = ? AND size = ?";
+		my $stmt = $dbh->prepare($sql) ||
+			&fatalError("Unable to prepare $sql: $DBI::errstr");
+		my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $in->{'family_size'}) ||
+			&fatalError("Unable to execute $sql: $DBI::errstr");
+		($in->{'fpl'}, $in->{'smi'}, $in->{'passbook_rate'}) = $stmt->fetchrow();
+		$stmt->finish();
+		
+		$sql = "SELECT fpl from FRS_General WHERE state = ? AND year = ? AND size = ?";
+		my $stmt = $dbh->prepare($sql) ||
+			&fatalError("Unable to prepare $sql: $DBI::errstr");
+		my $result = $stmt->execute($in->{'state'}, $in->{'year'}, 1) ||
+			&fatalError("Unable to execute $sql: $DBI::errstr");
+		$in->{'fpl_1person'} = $stmt->fetchrow();
+		$stmt->finish();
+		
+	   $sql = "SELECT fpl from FRS_General WHERE state = ? AND year = ? AND size = ?";
+		 my $stmt = $dbh->prepare($sql) ||
+			&fatalError("Unable to prepare $sql: $DBI::errstr");
+		my $result = $stmt->execute($in->{'state'}, $in->{'year'}, 2) ||
+			&fatalError("Unable to execute $sql: $DBI::errstr");
+		$in->{'fpl_2people'} = $stmt->fetchrow();
+		$stmt->finish();
+	}
 	
 	# outputs
 	# Most variables described in this are used as inputs, but this is where we'd include outputs.
@@ -362,14 +379,8 @@ sub general {
 	#It seemed important in the NH 2021 codes to also create an fmr variable within the output set. Not sure why, may delete if found to be unncecessary. But should be harmless.
 	$self{'out'}->{'fmr'} = $in->{'fmr'}; 
 
-
-    foreach my $name (qw(residence 
+	foreach my $name (qw(residence 
 	child_number
-	child1
-	child2
-	child3
-	child4
-	child5
 	family_size
 	child1_under1
 	child2_under1
@@ -390,11 +401,11 @@ sub general {
 	child5_under6
 	children_under6
 	child1_under13
-    child2_under13
-    child3_under13
-    child4_under13
-    child5_under13
- 	children_under13
+	child2_under13
+	child3_under13
+	child4_under13
+	child5_under13
+	children_under13
 	child1_under17
 	child2_under17
 	child3_under17
