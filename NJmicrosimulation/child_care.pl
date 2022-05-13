@@ -786,6 +786,10 @@ sub child_care
 		$unsub_all_children = 0;
 		$spr_all_children = 0;
 	} else  {
+		#Maybe just create the arrays from csv's here?
+		csvtoarrays($in->{'dir'}.'\FRS_spr.csv'); #Possibly move this to runfrsnj perl file to just run it once, but will then need to redefine function so that it names the arrays something specific to the excel sheet, maybe as an arguemnt. E.g. spr_age_min, and refer to those in the csv_arraylookup functions below.
+		#print @spr;
+
 		# We first have to check that the hometime variables, combined with the second parent’s work schedule, do not mathematically conflict. 
 		if ( (&greatest($out->{'parent1_transhours_w'}, $out->{'parent2_transhours_w'})) + $in->{'breadwinner_wkend_hometime'} + $in->{'breadwinner_wkday_hometime'}  > 168) {
 			# First chip away at the weekends at home if the second parent works, then weekdays. Vice versa if the caregiving parent doesn’t work on weekends. Conceivably, we could try to maximize this based on whether the first (caregiving) parent works on weekends, but that would just take too much code and be too reliant on additional assumptions.
@@ -804,7 +808,6 @@ sub child_care
 		$remaining_wknd_hometime = $in->{'breadwinner_wkend_hometime'};
 		$remaining_wkdy_hometime = $in->{'breadwinner_wkday_hometime'};
 		}
-
 		# Now calculate how many days and the number of hours worked by one parent on Saturday or Sunday, and adjust the weekend hometime amount by the maximum allowable time. Let’s assume this is the second parent in a two-parent family, or the only parent in a one-parent family, who works on the weekend.
 
 		# WEEKENDS:
@@ -994,7 +997,9 @@ sub child_care
 						if (${'day'.$j.'hours'} > 0 ) {
 							#During the school year : 
 							# Children can take the schoolbus  (check), so we subtract an hour in the morning and add an hour at the end of the day. We have to figure out how this would work for KY. For DC, DCPS transports only special needs students in the District. While kids enrolled in DCPS schools ride free on DC’s metro, which we accounted for in transportation costs, parents may have safety concerns about children under age 13 riding the metro on their own. That means that a parent would have to spend time to accompany the child to school or make arrangements for children to get to school and back. For example, they could pay for a carpool service or be accompanied by trusted neighborhood adults or older siblings. If the user wants to model additional costs for these alternative arrangements (e.g., contributing to carpooling expenses), then the user can add expenses in the other expenses field on step 7).
-							${'day'.$j.'_cc_hours1_child' .$i} = (&pos_sub(($schoolstart - 1), $in->{'workdaystart'}) - &pos_sub($schoolstart - 1, $in->{'workdaystart'} + ${'day'.$j.'hours'}));
+
+							${'day'.$j.'_cc_hours1_child' .$i} = (&pos_sub(($schoolstart - 1), $in->{'workdaystart'}) - &pos_sub($schoolstart - 1, $in->{'workdaystart'} + ${'day'.$j.'hours'})); #*problem line
+							
 							${'day'.$j.'_cc_hours2_child' .$i} = (&pos_sub(($in->{'workdaystart'} + ${'day'.$j.'hours'}), ${'schoolend_child'.$i} + 1) - &pos_sub($in->{'workdaystart'}, ${'schoolend_child'.$i} + 1)); 
 							# We need to account for the fact that some night shifts may bleed into the school day, and then, for really long shifts, whether night shifts bleed into the next evening. 
 							if ($in->{'workdaystart'} + ${'day'.$j.'hours'} > 24 + ($schoolstart - 1)) {
@@ -1150,7 +1155,8 @@ sub child_care
 		#print "child1_withbenefit_setting = ". $in->{"child1_withbenefit_setting"} . "\n";
 
 		#for(my $j=1; $j<=2; $j++) {
-		#	${'day'.$j.'cost_child1'} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', 'fulltime', 'age_min', '<=', 2, 'age_max', '>=', 2, 'ccdf_region', 'eq', 19, 'ccdf_type', 'eq', 'accredited_center');
+		#	${'day'.$j.'cost_child1'} = csv_arraylookup ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', 'fulltime', 'age_min', '<=', 2, 'age_max', '>=', 2, 'ccdf_region', 'eq', 19, 'ccdf_type', 'eq', 'accredited_center');
+		#	print 'day'.$j.'cost_child1 = '.${'day'.$j.'cost_child1'} . "\n";
 		#}
 		
 		
@@ -1158,7 +1164,7 @@ sub child_care
 		#		for(my $j=1; $j<=2; $j++) {
 		#			if ($in->{'child'.$i.'_age'} != -1 && $in->{'child'.$i.'_age'}< ${'childcare_threshold_age_child'.$i}) {
 		#				if (${"day".$j."care_child".$i} ne 'none') {
-		#					${'day'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"day".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', 19, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
+		#					${'day'.$j.'cost_child'.$i} = csv_arraylookup ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"day".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', 19, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
 		#				}
 		#			}
 		#		}
@@ -1169,7 +1175,7 @@ sub child_care
 		#		for(my $j=1; $j<=7; $j++) {
 		#			if ($in->{'child'.$i.'_age'} != -1 && $in->{'child'.$i.'_age'}< ${'childcare_threshold_age_child'.$i}) {
 		#				if (${"summerday".$j."care_child".$i} ne 'none') {
-		#					${'summerday'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"summerday".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', 14, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
+		#					${'summerday'.$j.'cost_child'.$i} = csv_arraylookup ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"summerday".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', 14, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
 		#				}
 		#			}
 		#		}
@@ -1196,7 +1202,7 @@ sub child_care
 					# Look up child care cost by $ccdf_time = $day#care_child#, by child#_age (>= age_min and <=age_max) and care type (ccdf_type = child#_withbenefit_setting), and call that variable $day#cost_child#.
 					
 					if (${"day".$j."care_child".$i} ne 'none') {
-						${'day'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"day".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
+						${'day'.$j.'cost_child'.$i} = csv_arraylookup ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_time', 'eq', ${"day".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
 					} 
 					
 					if (1 == 0) { #EquivalentSQL
@@ -1207,7 +1213,7 @@ sub child_care
 
 					# Look up child care cost by $ccdf_time = $summerday#care_child#, by child#_age (>= age_min and <=age_max) and care type (ccdf_type = child#_withbenefit_setting), and call that variable $summerday#cost_child#.
 					if (${"summerday".$j."care_child".$i} ne 'none') {
-						${'summerday'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"summerday".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
+						${'summerday'.$j.'cost_child'.$i} = csv_arraylookup ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_time', 'eq', ${"summerday".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
 					} 
 					if (1 == 0) { #EquivalentSQL
 						$stmt->execute($in->{'state'}, $in->{'year'}, ${"summerday".$j."care_child".$i}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"}, $in->{'residence'}, $in->{"child".$i."_withbenefit_setting"}) ||&fatalError("Unable to execute $sql: $DBI::errstr");
@@ -1286,11 +1292,11 @@ sub child_care
 						# Look up child care cost by $ccdf_time = $day#care_child#, by child#_age (>= age_min and <=age_max) and care type (if (CCDF = 1) {ccdf_type = child#_continue_setting} else {ccdf_type = child#_nobenefit_setting}), and call that variable $day#cost_child#.
 						
 						if (${"day".$j."care_child".$i} ne 'none') {
-							${'day'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"day".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_type', 'eq', ${'unsub_type'.$i});
+							${'day'.$j.'cost_child'.$i} = csv_arraylookup ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_time', 'eq', ${"day".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_type', 'eq', ${'unsub_type'.$i});
 						} 
 						
 						if (${"summerday".$j."care_child".$i} ne 'none') {
-							${'summerday'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"summerday".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_type', 'eq', ${'unsub_type'.$i});
+							${'summerday'.$j.'cost_child'.$i} = csv_arraylookup ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_time', 'eq', ${"summerday".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_type', 'eq', ${'unsub_type'.$i});
 						} 
 						
 						if (1 == 0) { #EquivalentSQL
@@ -1311,11 +1317,11 @@ sub child_care
 					for(my $j=1; $j<=7; $j++) {
 
 						if (${"day".$j."care_child".$i} ne 'none') {
-							${'day'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"day".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
+							${'day'.$j.'cost_child'.$i} = csv_arraylookup ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_time', 'eq', ${"day".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
 						} 
 					
 						if (${"summerday".$j."care_child".$i} ne 'none') {
-							${'summerday'.$j.'cost_child'.$i} = csvlookup_ops ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_time', 'eq', ${"summerday".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
+							${'summerday'.$j.'cost_child'.$i} = csv_arraylookup ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_time', 'eq', ${"summerday".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
 						} 
 
 						if (1 == 0) { #EquivalentSQL
