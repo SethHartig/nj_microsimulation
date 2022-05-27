@@ -43,6 +43,7 @@ sub general {
 	open(TEST3, '<', 'C:\Users\Bank Street\Dropbox\FRS\Perl\NJmicrosimulation\policy_option_profiles.csv') or die "Couldn't open policy options file $!";
 
 	#Chong, this was a preliminary version of the csvlookup function setup that I did, but since it grabs all the variables, it's a bit different than the function I set up. Let's leave it in here for now. 
+	#print "profile: ".$in->{'alternate_policy_profile'}."\n";
 	while (my $table_line = <TEST3>) {
 		# For now, during the code debugging phase, I am manually checking each variables needed and assigning its value based on the column in the input CSV code. Eventually, once the input names match, I plan to write a simple script that extracts the values based on column name instead of column number.
 		my @table_fields = split "," , $table_line;
@@ -69,6 +70,8 @@ sub general {
 		}
 	}
 	close TEST3;
+	#print '0.'.$in->{'cs_disregard_full_alt'}."\n";  
+
 	#** This ends the CSV lookup and for this table. 	
 
 	#print 'policy_profile ='.$in->{'policy_profile'}."\n"; 

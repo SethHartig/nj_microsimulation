@@ -188,8 +188,12 @@ sub parent_earnings
 	$parent2_earnings_w =  $parent2_earnings / $parent2_workweeksperyear;
 
 
-	$shifts_parent1 = $parent1_transhours_w / $in->{'maxshiftlength_parent1'};  
-	$shifts_parent2 = $parent2_transhours_w / $in->{'maxshiftlength_parent2'};																			  
+	if ($in->{'maxshiftlength_parent1'} > 0) {
+		$shifts_parent1 = $parent1_transhours_w / $in->{'maxshiftlength_parent1'};
+	}
+	if ($in->{'maxshiftlength_parent2'} > 0) {
+		$shifts_parent2 = $parent2_transhours_w / $in->{'maxshiftlength_parent2'};
+	}	
 	$multipleshifts_parent1 = pos_sub($shifts_parent1, $in->{'maxworkweek_parent1'});
 	$multipleshifts_parent2 = pos_sub($shifts_parent2, $in->{'maxworkweek_parent2'});	
 	
