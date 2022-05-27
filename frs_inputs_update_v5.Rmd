@@ -1,0 +1,77 @@
+---
+title: "Input Update Version 5"
+author: "Chong Li"
+date: "5/13/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(tidyverse,tidycensus,readxl,patchwork)
+library(reshape2)
+
+census_api_key("e0ff7586a0faf3bf1819178c1392ba6fa3df7ad9")
+```
+
+
+```{r}
+# Read data
+frs_individuals = read.csv("./data/cleaned_data/acs_individuals.csv")
+frs_df = read.csv("./data/cleaned_data/frs_inputs_4.csv")
+frs_df_old = read.csv("./data/cleaned_data/frs_inputs_1.csv")
+
+pums_19var = pums_variables %>% 
+  filter(survey == "acs1" & year== "2019") %>% 
+  distinct(var_code, .keep_all = T) 
+```
+
+## divide healthcare cost
+```{r}
+frs_df1 = frs_df %>% 
+  mutate(parent1_hlth_costs_oop_m = round(parent1_hlth_costs_oop_m/12,2),
+         parent2_hlth_costs_oop_m = round(parent2_hlth_costs_oop_m/12,2),)
+```
+
+## change spelling issue with nobenefit
+
+```{r}
+frs_df2 = frs_df1 %>% 
+  rename(child1_nobenefit_amt_m = child1_nobenfit_amt_m,
+         child2_nobenefit_amt_m = child2_nobenfit_amt_m,
+         child3_nobenefit_amt_m = child3_nobenfit_amt_m,
+         child4_nobenefit_amt_m = child4_nobenfit_amt_m,
+         child5_nobenefit_amt_m = child5_nobenfit_amt_m)
+```
+
+## set state_cadc and prop_tax_credit to 1
+```{r}
+frs_df3 = frs_df2 %>% 
+  mutate(
+    state_cadc = 1,
+    prop_tax_credit = 1
+  )
+```
+
+## workday start change
+
+```{r}
+frs_df4 = frs_df3 %>% 
+  mutate(
+    workdaystart = ifelse(is.na(workdaystart),9, workdaystart))
+```
+
+## override variables change to 0
+
+```{r}
+frs_df5 = frs_df4 %>% 
+  mutate(
+    housing_override = 0,
+    energy_cost_override = 0,
+    other_override = 0
+  )
+```
+
+```{r}
+write.csv(frs_df5, "./data/frs_inputs_5.csv", row.names = F)
+```
+
