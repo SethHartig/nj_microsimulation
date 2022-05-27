@@ -1,0 +1,287 @@
+---
+title: "Input Update Version 6"
+author: "Chong Li"
+date: "5/27/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(tidyverse,tidycensus,readxl,patchwork)
+library(reshape2)
+
+census_api_key("e0ff7586a0faf3bf1819178c1392ba6fa3df7ad9")
+```
+
+```{r}
+# Read data
+frs_individuals = read.csv("./data/cleaned_data/acs_individuals.csv")
+frs_df = read.csv("./data/cleaned_data/frs_inputs_5.csv")
+frs_df_old = read.csv("./data/cleaned_data/frs_inputs_1.csv")
+
+pums_19var = pums_variables %>% 
+  filter(survey == "acs1" & year== "2019") %>% 
+  distinct(var_code, .keep_all = T) 
+```
+
+```{r}
+nj_19h = haven::read_sas("./data/unix_hnj/psam_h34.sas7bdat")
+```
+
+## add one column to the far left
+```{r}
+frs_df1 = frs_df %>% mutate(
+  TESTCASEKEY = "s123456"
+) %>% 
+  select(TESTCASEKEY, everything())
+```
+
+## change fuel source for electricity
+```{r}
+frs_df2 = frs_df1 %>% 
+  mutate(
+    fuel_source = ifelse(fuel_source == "electricity", "electric", fuel_source)) 
+```
+
+
+## filter out those with parent1_age == 17
+
+* There is one entry with such age.
+```{r}
+frs_df3 = frs_df2 %>% 
+  filter(parent1_age != 17) 
+
+frs_df3
+```
+
+## edit entries with parent2_age <= 17
+* Those arel ikely households with married reference, but somehow the spousal information is missing
+* Therefore adjusting them all to 1.
+* also set the all age below 18 to 17.
+
+```{r}
+frs_df4 = frs_df3 %>% 
+  mutate(
+    family_structure = ifelse(family_structure == 2 & parent2_age <= 17, 1, family_structure)
+  ) %>% 
+  mutate(
+    parent2_age = ifelse(parent2_age <= 17, 17, parent2_age)
+  ) 
+```
+## issue with workhours_initial
+* This is actually inferred from `WKHP`, which is a datapoint from ACS.
+* Wage is actually calculated after earnings and WKHP.
+
+```{r}
+frs_df4 %>% 
+  select(SERIALNO, parent1_earnings_initial,parent2_earnings_initial, parent1_workhours_initial, parent2_workhours_initial)
+```
+
+## max_shiftlength adjustments
+* Now the reason why there are certain maxshiftlength at 0 is because the parent#_max_work is artificially set to 40. 
+* I set the maxshiftlength to be 4.
+```{r}
+frs_df5 = frs_df4 %>% 
+  mutate(maxshiftlength_parent1 = 
+           ifelse(maxshiftlength_parent1 == 0 & parent1_max_work > 0, 4, maxshiftlength_parent1)
+         ) %>% 
+  mutate(maxshiftlength_parent2 = 
+           ifelse(maxshiftlength_parent2 == 0 & parent2_max_work > 0, 4, maxshiftlength_parent2)
+         )
+```
+
+## maxworkweek variable
+* The issue also comes from the fact that many people work fewer than 40 hours per week - and the max_work was artificially set to 40 hours.
+* set those for parent1 to 5, parent 2 to max_work/8
+```{r}
+frs_df6 = frs_df5 %>% 
+  mutate(
+    maxworkweek_parent1 = ifelse(maxworkweek_parent1 == 0 & parent1_max_work > 0, 5, maxworkweek_parent1)
+  ) %>% 
+  mutate(
+    maxworkweek_parent2 = ifelse(maxworkweek_parent2 == 0 & parent2_max_work > 0, 1, maxworkweek_parent2)
+  ) 
+```
+
+## tanf
+* also set the savings to 1000
+```{r}
+tanf_fam = frs_individuals %>% 
+  filter(PAP > 0) %>% 
+  distinct(SERIALNO)
+
+frs_df7 = frs_df6 %>% 
+  mutate(
+    tanf = ifelse(SERIALNO %in% tanf_fam$SERIALNO, 1, 0)
+  ) %>% 
+  mutate(
+    savings = ifelse(tanf == 1, 1000, savings)
+  )
+```
+
+## hlth
+```{r}
+pub_coverage = frs_individuals %>% 
+  select(SERIALNO, PUBCOV) %>% 
+  filter(PUBCOV == 1) %>% 
+  distinct(SERIALNO)
+
+frs_df8 = frs_df7 %>% 
+  mutate(
+    hlth = ifelse(SERIALNO %in% pub_coverage$SERIALNO, 1, 0)
+  )
+```
+
+## FS
+
+```{r}
+food_stamp = nj_19h %>% 
+  select(SERIALNO, FS) %>% 
+  filter(FS == 1) %>% 
+  distinct(SERIALNO)
+
+frs_df9 = frs_df8 %>% 
+    mutate(
+    fsp = ifelse(SERIALNO %in% food_stamp$SERIALNO, 1, 0)
+  )
+```
+
+## cep missing variables
+
+```{r}
+cep_data = read.csv("./Njmicrosimulation/FRS_Locations.csv")
+```
+
+```{r}
+cep_par = cep_data %>% 
+  select(name, cep_particpation) %>% 
+  rename(
+    residence_nj = name
+  ) %>% 
+  distinct(residence_nj, .keep_all = T)
+
+frs_df10 = frs_df9 %>% 
+  inner_join(cep_par, by = "residence_nj") %>% 
+  rename(cep = cep_particpation)
+
+```
+
+## ethnicity variables
+```{r}
+single_parent_hh = nj_19h %>% 
+  filter(HHT2 == "06" | HHT2 == "10" )
+
+single_parent = frs_individuals %>%
+  filter(SERIALNO %in% single_parent_hh$SERIALNO) %>%
+  select(SERIALNO, AGEP, DIS, RELSHIPP, RAC1P) %>%
+  filter(
+    RELSHIPP == 20
+  ) %>%
+  arrange(SERIALNO,AGEP) %>%
+  select(SERIALNO,AGEP,DIS,RAC1P) %>%
+  mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  )
+```
+
+```{r}
+# select for the families with both parents around 
+double_parent_hh = nj_19h %>% 
+  filter(HHT2 == "01" | HHT2 == "03" )
+
+# when you have both parents, parent 1 is the one with higher income
+double_parent = frs_individuals %>%
+  filter(SERIALNO %in% double_parent_hh$SERIALNO) %>%
+  select(SERIALNO, DIS, AGEP, RELSHIPP,PINCP,SEX, RAC1P) %>%
+  filter(
+    RELSHIPP == 20 | RELSHIPP == 21 | RELSHIPP == 22 | RELSHIPP == 23 | RELSHIPP == 24
+  ) %>% 
+  group_by(SERIALNO) %>% 
+  arrange(SERIALNO, desc(PINCP)) %>%
+  select(SERIALNO,AGEP,PINCP,DIS,RAC1P) %>% 
+  mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  )
+
+# convert the dataframe into one that indicate respective parent ID within each family.
+parent_b4_trans = dcast(double_parent, id2 ~ SERIALNO, value.var="RAC1P") %>% 
+  mutate(
+    id2 = as.numeric(id2)
+  ) %>% 
+  arrange(id2) 
+
+# transpose the dataframe for it to match with the original format
+parent_a4 = as.data.frame(t(parent_b4_trans[,-1])) %>% 
+    rename_at(1:2, funs(paste(prefix,"ethnicity",sep="_"))) %>% 
+  mutate(
+    SERIALNO = rownames(.)
+  ) %>% 
+  rename(
+    parent1_ethnicity_1 = parent1_ethnicity,
+    parent2_ethnicity_1 = parent2_ethnicity
+  )
+```
+
+```{r}
+prefix = paste0("parent",1:2)
+columnsToAdd_1 = paste(prefix,"ethnicity",sep="_")
+
+# single parent race
+frs_df11 = frs_df10 %>% 
+  add_column(!!!set_names(as.list(rep(NA, length(columnsToAdd_1))), nm=columnsToAdd_1)) %>% 
+ left_join(single_parent, by = "SERIALNO") %>% 
+  mutate(
+    parent1_ethnicity = RAC1P,
+    parent2_ethnicity = case_when((!is.na(RAC1P)) ~ NA)
+  ) %>% 
+  select(-c(AGEP,id2,DIS, RAC1P))
+
+frs_df11.1 = frs_df11 %>% 
+  left_join(parent_a4, by = "SERIALNO") %>%
+  mutate(
+    parent1_ethnicity = ifelse(is.na(parent1_ethnicity_1), parent1_ethnicity, parent1_ethnicity_1),
+    parent2_ethnicity = ifelse(is.na(parent2_ethnicity_1), parent2_ethnicity, parent2_ethnicity_1)
+  ) 
+
+```
+
+```{r}
+# select RELSHIPP = 25, 26 and 27
+new_ind = frs_individuals %>% select(SERIALNO, AGEP, DIS, RELSHIPP, CIT, RAC1P) %>% 
+  filter(
+    RELSHIPP == 25 | RELSHIPP == 26 | RELSHIPP == 27
+  ) %>% 
+  arrange(SERIALNO,AGEP) %>% 
+  select(SERIALNO,AGEP,DIS,RELSHIPP,CIT, RAC1P) %>% 
+  mutate(
+    id2 = ave(as.character(SERIALNO), SERIALNO, FUN = seq_along)
+  ) 
+
+# extract the age of the kids, however, does not take account into families with 5+ kids (which exist)
+# this is the non-transposed version
+kids_b4_trans = dcast(new_ind, id2 ~ SERIALNO, value.var="RAC1P") %>% 
+  mutate(
+    id2 = as.numeric(id2)
+  ) %>% 
+  arrange(id2) %>% 
+  filter(id2 <= 5) 
+
+prefix = paste0("child",1:5)
+
+# transpose the age dataframe, with family SERIALNO as the index
+kids_a4 = as.data.frame(t(kids_b4_trans[,-1])) %>% 
+    rename_at(1:5, funs(paste(prefix,"ethnicity",sep="_"))) %>% 
+  mutate(
+    SERIALNO = rownames(.)
+  )
+
+frs_df11.2 = frs_df11.1 %>% 
+  left_join(kids_a4, by = "SERIALNO") 
+
+frs_df11.2
+```
+
+```{r}
+write.csv(frs_df11.2, "./data/cleaned_data/frs_inputs_6.csv", row.names = F)
+```
+
