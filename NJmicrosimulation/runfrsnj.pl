@@ -56,7 +56,7 @@ print "mode=".$mode."\n";
 # CHANGE THIS PATH TO WHERE THE PERL FILES ARE STORED:
 use lib 'C:\Users\Bank Street\Dropbox\FRS\Perl\NJmicrosimulation';
 # CHANGE THIS PATH TO WHERE THE SOURCE FILE (THE FILE WITH INPUTS) IS LOCATED:
-open(TEST1, '<', 'C:\Seth\Bankstreet extra\frs_inputs_4a.csv') or die "Couldn't open csv file $!";
+open(TEST1, '<', 'C:\Seth\Bankstreet extra\frs_inputs_4a_lowincome.csv') or die "Couldn't open csv file $!";
 # CHANGE THIS PATH TO WHERE THE OUTPUT FILE IS LOCATED
 open(TEST2, '>', 'C:\Seth\Bankstreet extra\perl_output.csv');
 # ALSO CHANGE THIS PATH TO WHERE THE PERL FILES ARE STORED:
@@ -75,8 +75,12 @@ $self{'in'}->{'dir'} = $dir;
 
 
 #Assign how many times (iterations) you want the perl code to increase the earnings of each household, and the amount of each earnings increase (interval):
-our $iterations = 2; # Can eventually make this into an input that can be set by ESI in the input CSV file.
-our $interval = 5000; #Can eventually make this into an input that can be set by ESI in the input CSV file.
+our $iterations = 30; # Can eventually make this into an argument for the perlc command, but keeping it hard-coded for now. 
+our $interval = 1000; # Can eventually make this into an argument for the perlc command, but keeping it hard-coded for now. 
+#5/11a: iterations =30 and i interval = 1000 took 23 minutes for range 1 50. Not horrible but not great. For 7000, that would be about 140 * 23 minutes = 3220 minutes = 53 hours. A ... while.
+#5/11a: iterations =30 and i interval = 1000 took 9 minutes for range 1 50. Not horrible but not great. For 7000, that would be about 140 * 9 minutes = 1260 minutes = 21 hours. Closer.
+#5/12: Just going by the low-income sheet (about 1000 entries), first 100 took about 11 minutes, using 30 iterations and 1000 intervals. So that's not bad -- would be 100 minutes or less than 2 hours.
+
 
 
 my @inputvars = qw(SERIALNO residence_nj residence rent_cost); #These are the variables from teh $in hash (set) that will appear for each SERIALNO in the final output sheet. Add additional input variables as needed to determing successful execution of modules or to debug them.
@@ -85,6 +89,10 @@ my @inputvars = qw(SERIALNO residence_nj residence rent_cost); #These are the va
 # rent_cost_m fpl
  
 my @outputvars = qw(parent1_employedhours_w parent2_employedhours_w parent1_earnings_m parent2_earnings_m ssi_recd hlth_cov_parent1 hlth_cov_parent2 hlth_cov_child_all health_expenses child_care_expenses child_care_recd rent_paid housing_recd fsp_recd cadc_recd eitc_recd payroll_tax tax_before_credits federal_tax_credits trans_expenses food_expenses child_foodcost_red_total other_expenses lifeline_recd salestax wic_recd liheap_recd tanf_recd child_support_recd income expenses net_resources); #These are the variables from teh $out hash (set) that will appear for each SERIALNO in the final output sheet. Add additional output variables as needed to determing successful execution of modules or to debug them.
+
+#Maybe just create the arrays from csv's here?
+#csvtoarrays($dir.'\FRS_spr.csv');
+#print @spr;
 
 if ($mode eq 'full' || $mode eq 'range') {
 
@@ -221,7 +229,7 @@ while (my $line = <TEST1>) {
 			#We now set up the order of functions to be executed as defined in the FRS's defaults function, replicated below. The NJ defaults.pl file and upcoming associated technical documentaiton describe why this spsecific order, and adjustemnts to that order based on disabiltiy or child support are necessary for our calcualtions.
 			my @order = qw(interest parent_earnings fostercare fli_tdi ssdi unemployment child_care ssp  ssi fed_hlth_insurance hlth child_support tanf  work child_care  ccdf hlth sec8 fsp_assets liheap fsp work afterschool schoolsummermeals wic fedtax eitc payroll ctc statetax food lifeline salestax other);
 			#);
-			#if (1 == 0) { #activate for debugging in single mode.
+			#if (1 == 0) { #activate for debugging in single mode, comment out when restoring.
 			if ($self{'in'}->{'cs_flag'} == 1 || $self{'in'}->{'disability_child1'} + $self{'in'}->{'disability_child2'} + $self{'in'}->{'disability_child3'} + $self{'in'}->{'disability_child4'} + $self{'in'}->{'disability_child5'} > 0) {
 				if ($self{'in'}->{'disability_child1'} + $self{'in'}->{'disability_child2'} + $self{'in'}->{'disability_child3'} + $self{'in'}->{'disability_child4'} + $self{'in'}->{'disability_child5'} > 0)	{
 					push @order, qw(ssi fed_hlth_insurance hlth);
@@ -233,70 +241,13 @@ while (my $line = <TEST1>) {
 				push @order, qw(tanf work child_care ccdf sec8 fsp_assets liheap fsp work afterschool schoolsummermeals wic fedtax eitc  payroll ctc statetax food lifeline salestax other);
 			}
 			#Now we execute ach of the above functions in the order assigned.
-			#} #activate for debugging errors in single mode.
+			#} #activate for debugging errors in single mode, comment out when restoring.
 			foreach my $function (@order) {
 				require $function.'.pl';
 				#Note: if this doesn't work, try using &$function instead of $function. Not sure how perl will get rid of the quotes in since the functions are referenced as a quoted word (sting) above. Probably fine, though -- erase this note if it is.
 				&$function(%self);
 			}
-			#if (1 == 0) { #Activate for debugging perl errors on single mode.
-			#The old way (from the NH 2021 analysis) this was done is below. This looks clunky, but it may prove helpful for debugging if there are errors that require identifying which perl function is generating the error. Commenting out for now, though:
-			
-			#require "parent_earnings_nh.pl";
-			#parent_earnings(%self);
-			#require "unemployment_nh.pl";
-			#unemployment (%self);
-			#require "ssp_nh.pl";
-			#ssp(%self);
-			#require "ssi_nh.pl";
-			#ssi(%self);
-			#require "fed_hlth_insurance_nh.pl";
-			#fed_hlth_insurance(%self);
-			#require "hlth_nh.pl";
-			#hlth(%self);		
-			#require "child_care_nh.pl";
-			#child_care(%self);
-			#require "child_support_nh.pl";
-			#child_support(%self);
-			#require "tanf_nh.pl";
-			#tanf(%self);
-			#require "ccdf_nh.pl";
-			#ccdf(%self);
-			#tanf(%self);		
-			#ccdf(%self);
-			#require "sec8_nh.pl";
-			#sec8(%self);
-			#require "fsp_assets_nh.pl";
-			#fsp_assets(%self);
-			#require "liheap_nh.pl";
-			#liheap(%self);
-			#require "fsp_nh.pl";
-			#fsp(%self);
-			#require "schoolsummermeals_nh.pl";
-			#schoolsummermeals(%self);
-			#require "wic_nh.pl";
-			#wic(%self);
-			#require "fedtax_nh.pl";
-			#fedtax(%self);
-			#require "eitc_nh.pl";
-			#eitc(%self);#above here
-			#require "payroll_nh.pl";
-			#payroll(%self);
-			#require "ctc_nh.pl";
-			#ctc(%self);
-			#require "statetax_nh.pl";
-			#statetax(%self);
-			#require "transportation_nh.pl";
-			#transportation(%self);
-			#require "food_nh.pl";
-			#food(%self);
-			#require "lifeline_nh.pl";
-			#lifeline(%self);
-			#require "other_nh.pl";
-			#other(%self);
-			#require "salestax_nh.pl";
-			#salestax(%self);
-
+			#if (1 == 0) { #Activate for debugging perl errors on single mode, comment out when restoring.
 
 			#set debt_payment to a yearly value, instead of monthly. Placing this here instead of the modules is a legacy of the frs codes. It's fairly superflous that it's here. Should probably be in the interest module but keeping it in here to keep the interest.pl code matching to the online version.
 			$out->{'debt_payment'} = 12 * $in->{'debt_payment'};
@@ -337,7 +288,7 @@ while (my $line = <TEST1>) {
 					die "\n";
 				}
 			}
-			#} #Activate for debugging perl errors on single mode.
+			#} #Activate for debugging perl errors on single mode, comment out when restoring.
 		}
 	}
 }
@@ -447,11 +398,13 @@ sub csvlookup {
 }
 
 #IMPORTANT NOTE: This code seems to have issues with lookups of 0 values. May need to change these to something like "-0.1" for things like checking child ages.
+
 sub csvlookup_ops {
-	#E.g. csvlookup_ops ($in->{'dir'}.'\FRS_Food.csv', 'cost', 'age_min', '<=', $in->{'child1_age'}, 'age_max', '>=', $in->{'child1_age'}). Should be similar to the above but with conditions to account for 'eq', '<', '>', '<=', and '>='. 
+	my @table_fields = ();
+	my @table_data = ();
 
 	open(CSVLOOKUPTABLE, '<', $_[0]) or die "Couldn't open csv lookup file $!";
-	#The zeroeth argument is the csv file. 
+	#The zeroeth argument is the csv file.
 
 	while (my $table_line = <CSVLOOKUPTABLE>) {
 		my @table_fields = split "," , $table_line;
@@ -460,58 +413,100 @@ sub csvlookup_ops {
 		if ($. == 1) {
 			my $table_listorder = 0;
 			foreach my $nameofinput (@table_fields) { 
-				$table_data[$table_listorder] = $nameofinput; 
+				$table_data[$table_listorder] = $nameofinput;
 				$table_listorder += 1;
 			}
 		} else {
-
-			my $table_return = 1;
-			my $table_valueorder = 0;
+			#print @table_data;
+			our $table_valueorder = 0;
 			foreach my $table_cell (@table_fields) {
-				$table->{$table_data[$table_valueorder]} = $table_cell; 
-				
-				for (my $i = 1; $i <= (scalar(@_) - 2)/3; $i++)	{ #repeat over the number of triplets of table column, operation (e.g. '>=', and variable feeing value of table column. This is one third of the remaining arguments after the first two (the csv file and the returning column) are subtracted. E.g. for csvlookup_ops ($in->{'dir'}.'\FRS_Food.csv', 'cost', 'age_min', '<=', $in->{'child1_age'}, 'age_max', '>=', $in->{'child1_age'}), this would repeat (8 -2) / 3 = 2 times. 
-					#The operator "ne" converts any numbers to strings, still. 
-					
-					if (!$table->{$_[3*$i-1]} || !$table->{$_[1]}) { #This checks wehther the variables referred to below are defined. $_[1] is the variable in the column we want to return. $_[3*$i-1]] refers to teh argument we are testing, which will be placed in the argument order as 2, 5, 8, 11, etc.
-						$table_return = 0;
-					} elsif ($_[3*$i] eq 'eq') {						 
-						if ($table->{$_[3*$i-1]} ne $_[3*$i + 1]) { #i = 1 corresponds to arguments 2,3, and 4. i = 2 corresponds to arguments 5, 6, and 7. i =3 corresponds to 8,9, and 10. And so on. (in replicating csvlookup, I switched the order of this so that it matches the syntax of inqeualities rather than reverses them.)
-						# seeme like the eq and ne 
-							$table_return = 0;
-						}
-					} elsif ($_[3*$i] eq '<') {						 
-						if (sprintf("%.1f", $table->{$_[3*$i-1]}) >= sprintf("%.1f",$_[3*$i + 1])) { 
-							$table_return = 0;
-						}
-					} elsif ($_[3*$i] eq '<=') {						 
-						if (sprintf("%.1f", $table->{$_[3*$i-1]}) > sprintf("%.1f",$_[3*$i + 1])) { 
-							$table_return = 0;
-						}
-					} elsif ($_[3*$i] eq '>') {						 
-						if (sprintf("%.1f", $table->{$_[3*$i-1]}) <= sprintf("%.1f",$_[3*$i + 1])) { 
-							$table_return = 0;
-						}
-					} elsif ($_[3*$i] eq '>=') {						 
-						if (sprintf("%.1f", $table->{$_[3*$i-1]}) < sprintf("%.1f",$_[3*$i + 1])) { 
-							$table_return = 0;
-						}
-					}
-				}
-				if ($table_return == 0) {
-					$table_valueorder += 1;	
-				} else {
-					my $output = $table->{$_[1]};
-					@table_fields = ();
-					@table_data = ();
-					close CSVLOOKUPTABLE;
-					return $output ;
-				}
-			}
-			if ($table_return == 0) { #If it gets here without returning a value, the lookup has not worked.
-				#print "csvlookup_ops failed for ".$_[1];
+				@{$table_data[$table_valueorder]}[$.] = $table_cell;
+				$table_valueorder += 1;	
 			}
 		}
+		$rows = $.;
+	}
+	close CSVLOOKUPTABLE;
+	for (my $t = 2; $t <= $rows; $t++)	{
+		my $table_return = 1;
+		for (my $i = 1; $i <= (scalar(@_) - 2)/3; $i++)	{ #repeat over the number of triplets of table column, operation (e.g. '>=', and variable feeing value of table column. This is one third of the remaining arguments after the first two (the csv file and the returning column) are subtracted. E.g. for csvlookup_ops ($in->{'dir'}.'\FRS_Food.csv', 'cost', 'age_min', '<=', $in->{'child1_age'}, 'age_max', '>=', $in->{'child1_age'}), this would repeat (8 -2) / 3 = 2 times. 
+			#The operator "ne" converts any numbers to strings, still. 
+			if (($_[3*$i] eq 'eq' && ${$_[3*$i-1]}[$t] ne $_[3*$i + 1]) || ($_[3*$i] eq '<' && sprintf("%.1f", ${$_[3*$i-1]}[$t]) >= sprintf("%.1f",$_[3*$i + 1])) || ($_[3*$i] eq '<='  && sprintf("%.1f", ${$_[3*$i-1]}[$t]) > sprintf("%.1f",$_[3*$i + 1])) || ($_[3*$i] eq '>' && sprintf("%.1f", ${$_[3*$i-1]}[$t]) <= sprintf("%.1f",$_[3*$i + 1])) || ($_[3*$i] eq '>=' && sprintf("%.1f", ${$_[3*$i-1]}[$t]) < sprintf("%.1f",$_[3*$i + 1]))) { 
+				$table_return = 0; #i = 1 corresponds to arguments 2,3, and 4. i = 2 corresponds to arguments 5, 6, and 7. i =3 corresponds to 8,9, and 10. And so on. (in replicating csvlookup, I switched the order of this so that it matches the syntax of inqeualities rather than reverses them.)
+			}
+		}
+		if ($table_return == 1) {
+			my $output = ${$_[1]}[$t];
+		}
+		#if ($table_return == 0) { #If it gets here without returning a value, the lookup has not worked.
+		#	#print "csvlookup_ops failed for ".$_[1];
+		#}
+		
 	}
 }
 
+sub csvtoarrays {
+	#This will just convert the columns in a csv to arrays, that can be used for later lookups.
+	my @table_fields = ();
+	my @table_data = ();
+
+	open(CSVLOOKUPTABLE, '<', $_[0]) or die "Couldn't open csv lookup file $!";
+	#The zeroeth argument is the csv file.
+
+	while (my $table_line = <CSVLOOKUPTABLE>) {
+		my @table_fields = split "," , $table_line;
+
+		#Tihs part is using the names in the first row to create a set of input names, and then using the order of those input names to assign the input values of the subsequent rows.
+		if ($. == 1) {
+			my $table_listorder = 0;
+			foreach my $nameofinput (@table_fields) { 
+				$table_data[$table_listorder] = $nameofinput;
+				$table_listorder += 1;
+			}
+		} else {
+			#print @table_data;
+			our $table_valueorder = 0;
+			foreach my $table_cell (@table_fields) {
+				@{$table_data[$table_valueorder]}[$.] = $table_cell;
+				$table_valueorder += 1;	
+			}
+		}
+	}
+	close CSVLOOKUPTABLE;
+}
+
+sub csv_arraylookup {
+	#This will look up the values in an array like a vlookup. The first argument will be a name so that it can be referred back to for debugging if needed.
+	our $match = 1;
+	for (my $i = 1; $i <= (scalar(@_) - 2)/3; $i++)	{
+		if (scalar(@{$_[3*$i-1]}) != scalar(@{$_[1]})) {
+			print 'arrays do not match in csv_arraylookup called '.$_[0]."\n";
+			$match = 0;
+		}
+	}
+	#print "okay1";	
+	if ($match == 1) {
+		#print "okay2";	
+		my $table_return = 1;
+		for (my $t = 2; $t <= scalar(@{$_[1]}); $t++)	{
+			my $table_return = 1;
+			for (my $i = 1; $i <= (scalar(@_) - 2)/3; $i++)	{ #repeat over the number of triplets of table column, operation (e.g. '>=', and variable feeing value of table column. This is one third of the remaining arguments after the first two (the csv file and the returning column) are subtracted. E.g. for csvlookup_ops ('whatevername', 'cost', 'age_min', '<=', $in->{'child1_age'}, 'age_max', '>=', $in->{'child1_age'}), this would repeat (8 -2) / 3 = 2 times. 
+				#The operator "ne" converts any numbers to strings, still. 
+				#print "okay3 \n";	
+				if (($_[3*$i] eq 'eq' && ${$_[3*$i-1]}[$t] ne $_[3*$i + 1]) || ($_[3*$i] eq '<' && sprintf("%.1f", ${$_[3*$i-1]}[$t]) >= sprintf("%.1f",$_[3*$i + 1])) || ($_[3*$i] eq '<='  && sprintf("%.1f", ${$_[3*$i-1]}[$t]) > sprintf("%.1f",$_[3*$i + 1])) || ($_[3*$i] eq '>' && sprintf("%.1f", ${$_[3*$i-1]}[$t]) <= sprintf("%.1f",$_[3*$i + 1])) || ($_[3*$i] eq '>=' && sprintf("%.1f", ${$_[3*$i-1]}[$t]) < sprintf("%.1f",$_[3*$i + 1]))) { 
+					$table_return = 0; #i = 1 corresponds to arguments 2,3, and 4. i = 2 corresponds to arguments 5, 6, and 7. i =3 corresponds to 8,9, and 10. And so on. (in replicating csvlookup, I switched the order of this so that it matches the syntax of inqeualities rather than reverses them.)
+				}
+			}
+			if ($table_return == 1) {
+				my $output = ${$_[1]}[$t];
+				#print "table return = $table_return . output = $output . \n";
+				#return $output ;
+				return $output ;
+			}
+			#if ($table_return == 0) { #If it gets here without returning a value, the lookup has not worked.
+			#	#print "csvlookup_ops failed for ".$_[1];
+			#}
+			
+		}
+	}
+}
