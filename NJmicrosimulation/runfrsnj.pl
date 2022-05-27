@@ -11,7 +11,7 @@ our $firstline = 0;
 our $lastline = 0;
 our $single_casekey = 0;
 our $single_iteration = 0;
-our $alternate_policy_profile = 'none';
+our $alternate_policy_profile = 'default_profile';
 our $alternate_addon = 0;
 
 #Then we assign variables from the arguments in the command line.
@@ -56,7 +56,7 @@ print "mode=".$mode."\n";
 # CHANGE THIS PATH TO WHERE THE PERL FILES ARE STORED:
 use lib 'C:\Users\Bank Street\Dropbox\FRS\Perl\NJmicrosimulation';
 # CHANGE THIS PATH TO WHERE THE SOURCE FILE (THE FILE WITH INPUTS) IS LOCATED:
-open(TEST1, '<', 'C:\Seth\Bankstreet extra\frs_inputs_4a_lowincome.csv') or die "Couldn't open csv file $!";
+open(TEST1, '<', 'C:\Seth\Bankstreet extra\frs_inputs_5b_lowincome.csv') or die "Couldn't open csv file $!";
 # CHANGE THIS PATH TO WHERE THE OUTPUT FILE IS LOCATED
 open(TEST2, '>', 'C:\Seth\Bankstreet extra\perl_output.csv');
 # ALSO CHANGE THIS PATH TO WHERE THE PERL FILES ARE STORED:
@@ -83,7 +83,7 @@ our $interval = 1000; # Can eventually make this into an argument for the perlc 
 
 
 
-my @inputvars = qw(SERIALNO residence_nj residence rent_cost); #These are the variables from teh $in hash (set) that will appear for each SERIALNO in the final output sheet. Add additional input variables as needed to determing successful execution of modules or to debug them.
+my @inputvars = qw(SERIALNO residence_nj residence rent_cost WGTP); #These are the variables from teh $in hash (set) that will appear for each SERIALNO in the final output sheet. Add additional input variables as needed to determing successful execution of modules or to debug them.
 
 #Removing these output variables to conserve time and space in processing. Just throw them back in if needed:
 # rent_cost_m fpl
@@ -227,8 +227,8 @@ while (my $line = <TEST1>) {
 			#RUNNING THE PERL MODULES OF EXPENSES AND BENEFITS:
 			
 			#We now set up the order of functions to be executed as defined in the FRS's defaults function, replicated below. The NJ defaults.pl file and upcoming associated technical documentaiton describe why this spsecific order, and adjustemnts to that order based on disabiltiy or child support are necessary for our calcualtions.
-			my @order = qw(interest parent_earnings fostercare fli_tdi ssdi unemployment child_care ssp  ssi fed_hlth_insurance hlth child_support tanf  work child_care  ccdf hlth sec8 fsp_assets liheap fsp work afterschool schoolsummermeals wic fedtax eitc payroll ctc statetax food lifeline salestax other);
-			#);
+			my @order = qw(interest parent_earnings fostercare fli_tdi ssdi unemployment  child_care ssp ssi fed_hlth_insurance hlth child_support tanf  work child_care  ccdf hlth sec8 fsp_assets liheap fsp work afterschool schoolsummermeals wic fedtax eitc payroll ctc statetax food lifeline salestax other);
+			# ); 
 			#if (1 == 0) { #activate for debugging in single mode, comment out when restoring.
 			if ($self{'in'}->{'cs_flag'} == 1 || $self{'in'}->{'disability_child1'} + $self{'in'}->{'disability_child2'} + $self{'in'}->{'disability_child3'} + $self{'in'}->{'disability_child4'} + $self{'in'}->{'disability_child5'} > 0) {
 				if ($self{'in'}->{'disability_child1'} + $self{'in'}->{'disability_child2'} + $self{'in'}->{'disability_child3'} + $self{'in'}->{'disability_child4'} + $self{'in'}->{'disability_child5'} > 0)	{
@@ -467,7 +467,7 @@ sub csvtoarrays {
 			#print @table_data;
 			our $table_valueorder = 0;
 			foreach my $table_cell (@table_fields) {
-				@{$table_data[$table_valueorder]}[$.] = $table_cell;
+				@{$table_data[$table_valueorder]}[$. - 2] = $table_cell;
 				$table_valueorder += 1;	
 			}
 		}

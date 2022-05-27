@@ -257,14 +257,19 @@ sub tanf
 		$child_support_recd_m = $out->{'child_support_paid_m'}; 
 		
 	} else {
-		$sql = "SELECT fpl from FRS_General WHERE state = ? AND year = ? AND size = ?";
-		my $stmt = $dbh->prepare($sql) ||
-			&fatalError("Unable to prepare $sql: $DBI::errstr");
-		my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $unit_size) ||
-			&fatalError("Unable to execute $sql: $DBI::errstr");
-		$unit_fpl = $stmt->fetchrow();
-		$stmt->finish();
+		if (1 == 0) { #ArhivedSQL run:
+			$sql = "SELECT fpl from FRS_General WHERE state = ? AND year = ? AND size = ?";
+			my $stmt = $dbh->prepare($sql) ||
+				&fatalError("Unable to prepare $sql: $DBI::errstr");
+			my $result = $stmt->execute($in->{'state'}, $in->{'year'}, $unit_size) ||
+				&fatalError("Unable to execute $sql: $DBI::errstr");
+			$unit_fpl = $stmt->fetchrow();
+			$stmt->finish();
+		}
+		$unit_fpl = &csvlookup($in->{'dir'}.'\FRS_general.csv', 'fpl', 'size', $unit_size);
+	
 
+	
 		#POLICY MODELING OPTION FOR NJ: recalculate tanf benefit according to user entered input on % of fpl for unit size. according to unit size for policy modeling. 
 		if ($in->{'pct_increase_tanf_alt'} == 1) {
 			#Recalculate fpl according to unit size, rather than family_size. 
@@ -349,15 +354,19 @@ sub tanf
 			} elsif ($tanf_recd_m > 0 && $stipend_perday >0 && $out->{'parent1_transhours_w'} + $out->{'parent2_transhours_w'} > 0) { #Changed from making "travelstipends" an input to just whether there's a positive stipend per day, to universalzie this code.
 				if ($out->{'shifts_parent1'}>0 && $in->{'parent1_unqualified'} == 0) { 
 					$parent1_exactworkdays = ceil($out->{'shifts_parent1'} - $out->{'multipleshifts_parent1'}); 
-					if ($out->{'parent1_transhours_w'} / $parent1_exactworkdays >= 4) { 
-						$tanf_stipend_amt = $stipend_perday * $parent1_exactworkdays * 4.33; #changed from 15 to stipend_perday
-					} 
+					if ($parent1_exactworkdays > 0) {
+						if ($out->{'parent1_transhours_w'} / $parent1_exactworkdays >= 4) { 
+							$tanf_stipend_amt = $stipend_perday * $parent1_exactworkdays * 4.33; #changed from 15 to stipend_perday
+						}
+					}
 				} 
 				if ($out->{'shifts_parent2'}>0 && $in->{'parent2_unqualified'} == 0) { 
 					$parent2_exactworkdays = ceil($out->{'shifts_parent2'} - $out->{'$multipleshifts_parent2'}); 
-					if ($out->{'$parent2_transhours_w'} / $parent2_exactworkdays >= 4) { 
-						$tanf_stipend_amt += $stipend_perday * $parent2_exactworkdays * 4.33; #changed from 15 to stipend_perday 
-					} 
+					if ($parent2_exactworkdays > 0) {
+						if ($out->{'$parent2_transhours_w'} / $parent2_exactworkdays >= 4) { 
+							$tanf_stipend_amt += $stipend_perday * $parent2_exactworkdays * 4.33; #changed from 15 to stipend_perday 
+						}
+					}
 				}
 			}
 						
@@ -510,6 +519,7 @@ sub tanf
 	# 6. CALCULATE FINAL TANF RECEIVED AND CHILD SUPPORT RECEIVED
 
 	#policy modeling option to allow full amt of child support to pass through to assistance unit.
+	#print '1.'.$in->{'cs_disregard_full_alt'}."\n";  
 	if ($in->{'cs_disregard_full_alt'} == 1) { 
 		$child_support_recd_m = $out->{'child_support_paid_m'};
 	} else {
@@ -547,7 +557,7 @@ sub tanf
 	#	foreach my $name (qw(tanf_recd tanf_recd_m child_support_recd child_support_recd_m parent2_incapacitated tanf_family_structure unit_size tanf_stipend_amt tanflock tanf_recd_proxy tanf_sanctioned_amt)) { #These should match the outputs below, so any additions to those variables should be reflected in this line. 
 	#		${$name} = $out->{$name};
 	#	}
-	#} 
+	#} f
 
 	#if ($tanf_recd_m > 0) {
 	#	$tanflock = 1;
@@ -555,7 +565,7 @@ sub tanf
 
 
 	# outputs
-    foreach my $name (qw(tanf_recd tanf_recd_m child_support_recd child_support_recd_m parent2_incapacitated tanf_family_structure  tanf_child_number unit_size tanf_stipend_amt tanflock tanf_recd_proxy tanf_sanctioned_amt tanf_children_under1 tanf_children_under6 tanf_oneparent_id)) { #These should match the outputs in the tanflock condition above, so any additions to these variables should also be added to that foreach statement. 
+    foreach my $name (qw(tanf_recd tanf_recd_m child_support_recd child_support_recd_m parent2_incapacitated tanf_family_structure  tanf_child_number unit_size tanf_stipend_amt tanflock tanf_recd_proxy tanf_sanctioned_amt tanf_children_under1 tanf_children_under6 tanf_oneparent_id meetsworkreq tanf_income tanf_maxben tanf_recd_debug1)) { #These should match the outputs in the tanflock condition above, so any additions to these variables should also be added to that foreach statement. 
 		$self{'out'}->{$name} = ${$name}; 
     }
 

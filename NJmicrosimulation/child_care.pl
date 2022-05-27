@@ -793,7 +793,7 @@ sub child_care
 		# We first have to check that the hometime variables, combined with the second parent’s work schedule, do not mathematically conflict. 
 		if ( (&greatest($out->{'parent1_transhours_w'}, $out->{'parent2_transhours_w'})) + $in->{'breadwinner_wkend_hometime'} + $in->{'breadwinner_wkday_hometime'}  > 168) {
 			# First chip away at the weekends at home if the second parent works, then weekdays. Vice versa if the caregiving parent doesn’t work on weekends. Conceivably, we could try to maximize this based on whether the first (caregiving) parent works on weekends, but that would just take too much code and be too reliant on additional assumptions.
-			$remaining_wknd_hometime = &pos_sub(168 - &greatest($out->{'parent1_transhours_w'}, $out->{'parent2_transhours_w'}), $out->{'breadwinner_wkday_hometime'});
+			$remaining_wknd_hometime = &pos_sub(168 - &greatest($out->{'parent1_transhours_w'}, $out->{'parent2_transhours_w'}), $in->{'breadwinner_wkday_hometime'});
 		
 			if (&greatest($out->{'parent1_transhours_w'}, $out->{'parent2_transhours_w'}) + $remaining_wknd_hometime + $in->{'breadwinner_wkday_hometime'} > 168) {
 				$remaining_wkdy_hometime = &pos_sub(168 - &greatest($out->{'parent1_transhours_w'}, $out->{'parent2_transhours_w'}), $remaining_wknd_hometime);
@@ -921,7 +921,6 @@ sub child_care
 		$remaining_wkdy_hometime = &pos_sub($remaining_wkdy_hometime, $tuesdayshifts * $out->{'caregiver_maxshiftlength'} + $roundtriptraveltime *ceil(&least(1, $tuesdayshifts)) + (ceil($tuesdayshifts) - 1) * $out->{'caregiver_backtobackshifts'}); #10/20 edit: removed the text ".5 * $roundtriptraveltime *" from this equation.
 		$day1hours = &pos_sub($mondayshifts * $out->{'caregiver_maxshiftlength'} + $roundtriptraveltime *ceil(&least(1, $mondayshifts)) + (ceil($mondayshifts) - 1) * $out->{'caregiver_backtobackshifts'}, $remaining_wkdy_hometime); #10/20 edit: removed the text ".5 * $roundtriptraveltime *" from this equation.
 		$remaining_wkdy_hometime = &pos_sub($remaining_wkdy_hometime, $mondayshifts * $out->{'caregiver_maxshiftlength'} + $roundtriptraveltime *ceil(&least(1, $mondayshifts)) + (ceil($mondayshifts) - 1) * $out->{'caregiver_backtobackshifts'}); #10/20 edit: removed the text ".5 * $roundtriptraveltime *" from this equation.
-
 		# How much child care does a child need?
 
 		# From the school schedule at 
@@ -998,7 +997,7 @@ sub child_care
 							#During the school year : 
 							# Children can take the schoolbus  (check), so we subtract an hour in the morning and add an hour at the end of the day. We have to figure out how this would work for KY. For DC, DCPS transports only special needs students in the District. While kids enrolled in DCPS schools ride free on DC’s metro, which we accounted for in transportation costs, parents may have safety concerns about children under age 13 riding the metro on their own. That means that a parent would have to spend time to accompany the child to school or make arrangements for children to get to school and back. For example, they could pay for a carpool service or be accompanied by trusted neighborhood adults or older siblings. If the user wants to model additional costs for these alternative arrangements (e.g., contributing to carpooling expenses), then the user can add expenses in the other expenses field on step 7).
 
-							${'day'.$j.'_cc_hours1_child' .$i} = (&pos_sub(($schoolstart - 1), $in->{'workdaystart'}) - &pos_sub($schoolstart - 1, $in->{'workdaystart'} + ${'day'.$j.'hours'})); #*problem line
+							${'day'.$j.'_cc_hours1_child' .$i} = (&pos_sub(($schoolstart - 1), $in->{'workdaystart'}) - &pos_sub($schoolstart - 1, $in->{'workdaystart'} + ${'day'.$j.'hours'}));
 							
 							${'day'.$j.'_cc_hours2_child' .$i} = (&pos_sub(($in->{'workdaystart'} + ${'day'.$j.'hours'}), ${'schoolend_child'.$i} + 1) - &pos_sub($in->{'workdaystart'}, ${'schoolend_child'.$i} + 1)); 
 							# We need to account for the fact that some night shifts may bleed into the school day, and then, for really long shifts, whether night shifts bleed into the next evening. 
@@ -1053,6 +1052,26 @@ sub child_care
 						#${'nontraditional_days_child'.$i} +=1;
 						#${'nontraditional_summerdays_child'.$i} +=1;
 					}
+					if ($in->{'disability_child'.$i} == 1) {
+						if (${'day'.$j.'_cc_hours_child'.$i} > 0) {
+							#LOOK AT ME: Once "partime" to "parttime" typo is corrected, change this if block to lines like this:
+							#${'day'.$j.'care_child'.$i} = ${'day'.$j.'care_child'.$i}.'_special';
+							
+							#But in the meantime, since we can't concatenate like that,
+							if (${'day'.$j.'care_child'.$i}  eq 'parttime') { 
+								${'day'.$j.'care_child'.$i} = 'partime_special'; 
+							} elsif (${'day'.$j.'care_child'.$i} eq 'fulltime') {
+								${'day'.$j.'care_child'.$i} = 'fulltime_special';
+							}
+							if (${'summerday'.$j.'care_child'.$i}  eq 'parttime') { 
+								${'summerday'.$j.'care_child'.$i} = 'partime_special'; 
+							} elsif (${'summerday'.$j.'care_child'.$i} eq 'fulltime') {
+								${'summerday'.$j.'care_child'.$i} = 'fulltime_special';
+							}
+
+						}
+					}
+
 	 
 				} 	
 				# WEEKDAYS during the school year:
@@ -1194,21 +1213,19 @@ sub child_care
 					$weeks_off = &greatest($in->{'parent1_time_off_foster'}, $in->{'parent2_time_off_foster'});	#again, here we are assuming the parents are taking overlapping leave (not taking leave one after another but taking leave together). We may need to adjust this to either maximize child care savings and assume the parents don't take leave together or add a user-entered input to ask whether the parents' leave overlaps.	
 				}
 				#Subsidized rates:
-				
 				# For each day from 1-7 :
 				for(my $j=1; $j<=7; $j++) {
 					# Look up price of child care by type of subsidized care:
 
 					# Look up child care cost by $ccdf_time = $day#care_child#, by child#_age (>= age_min and <=age_max) and care type (ccdf_type = child#_withbenefit_setting), and call that variable $day#cost_child#.
 					
-					if (${"day".$j."care_child".$i} ne 'none') {
+					if (${"day".$j."care_child".$i} ne 'none') {					
 						${'day'.$j.'cost_child'.$i} = csv_arraylookup ($in->{'dir'}.'\FRS_spr.csv', 'spr', 'ccdf_region', 'eq', $in->{'residence'}, 'ccdf_time', 'eq', ${"day".$j."care_child".$i}, 'age_min', '<=', $in->{'child'.$i.'_age'}, 'age_max', '>=', $in->{'child'.$i.'_age'}, 'ccdf_type', 'eq', $in->{"child".$i."_withbenefit_setting"});
 					} 
-					
 					if (1 == 0) { #EquivalentSQL
 						$stmt->execute($in->{'state'}, $in->{'year'}, ${"day".$j."care_child".$i}, $in->{"child".$i."_age"}, $in->{"child".$i."_age"}, $in->{'residence'}, $in->{"child".$i."_withbenefit_setting"}) ||&fatalError("Unable to execute $sql: $DBI::errstr");
 						${'day'.$j.'cost_child'.$i} = $stmt->fetchrow() / 5; 
-					}
+					} 
 					#IMPORTANT NOTE: Note that in NJ, we are dividing the weekly rates in the FRS_SPR table by 5. The justification for this derivation is that the SPR daily rates are all one-fifth of the weekly rates, and there is only weekly or daily (not monthly) in the market rate study. As we are deriving missing values for other market rates than those included in the study based on the ratios between subsidized care and market rates when both are available for certain types of care, we are similarly assuming here that the market rates are proportionately relative to the subsidized rates for the full set of daily rates, which are all misssing from the market rate study.
 
 					# Look up child care cost by $ccdf_time = $summerday#care_child#, by child#_age (>= age_min and <=age_max) and care type (ccdf_type = child#_withbenefit_setting), and call that variable $summerday#cost_child#.
